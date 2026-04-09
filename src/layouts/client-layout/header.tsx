@@ -72,7 +72,7 @@ export const Header: React.FC = () => {
             }
         } else {
             // Переходим на другую страницу с якорем
-            navigate(`${basePath}#${anchor}`);
+            navigate(`${basePath}${anchor ? `#${anchor}` : ''}`);
         }
 
         setIsMobileMenuOpen(false);
@@ -116,7 +116,7 @@ export const Header: React.FC = () => {
                                     <h1 className={`font-display font-bold text-xl leading-tight transition-colors ${
                                         isScrolled ? 'text-gray-900' : 'text-white'
                                     }`}>
-                                        Le Simba
+                                        Love Simba
                                     </h1>
                                     <p className={`text-xs tracking-wider transition-colors ${
                                         isScrolled ? 'text-gray-500' : 'text-white/80'
@@ -284,7 +284,7 @@ export const Header: React.FC = () => {
                                             <Utensils className="w-5 h-5 text-white" />
                                         </div>
                                         <div>
-                                            <h2 className="font-display font-bold text-gray-900">Le Simba</h2>
+                                            <h2 className="font-display font-bold text-gray-900">Love Simba</h2>
                                             <p className="text-xs text-gray-500">FRENCH CUISINE</p>
                                         </div>
                                     </div>
