@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 import { Link } from 'react-router-dom';
-import {MapWithContent} from "../shared/map";
+import {MapWithContent} from "../../shared/map";
 
 export const Contacts: React.FC = () => {
     const [copiedPhone1, setCopiedPhone1] = React.useState(false);
