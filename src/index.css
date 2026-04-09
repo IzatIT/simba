@@ -1,0 +1,120 @@
+@import "tailwindcss";
+
+*{
+    font-family: "Open Sans", sans-serif;
+}
+
+.container{
+    width: 80%;
+    margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+    .container{
+        width: 95%;
+    }
+}
+
+@layer base {
+    html {
+        scroll-behavior: smooth;
+    }
+
+    body {
+        font-family: 'Inter', sans-serif;
+        overflow-x: hidden;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Playfair Display', serif;
+    }
+}
+
+@layer utilities {
+    .animation-delay-2000 {
+        animation-delay: 2s;
+    }
+
+    .animation-delay-4000 {
+        animation-delay: 4s;
+    }
+
+    .text-shadow {
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .text-shadow-lg {
+        text-shadow: 4px 4px 8px rgba(0,0,0,0.5);
+    }
+}
+
+/* Custom animations */
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-20px);
+    }
+}
+
+.animate-float {
+    animation: float 6s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+.animate-shimmer {
+    background: linear-gradient(
+            90deg,
+            #f3f4f6 25%,
+            #e5e7e9 50%,
+            #f3f4f6 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+
+/* Parallax effect */
+.parallax {
+    perspective: 1px;
+    height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.parallax-layer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+}
+
+.parallax-layer-base {
+    transform: translateZ(0);
+}
+
+.parallax-layer-back {
+    transform: translateZ(-1px) scale(2);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c4a484;
+}

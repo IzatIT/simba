@@ -1,0 +1,6 @@
+export {AtBashyDistrict} from './at-bashy-district'
+export {AkTalaDistrict} from './ak-tala-district'
+export {JumgalDistrict} from './jumgal-district'
+export {SonKol} from './son-kol'
+export {KochkorDistrict} from './kochkor-district'
+export {NarynDistrict} from './naryn-district'

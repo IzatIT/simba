@@ -1,0 +1,7 @@
+export {AravanDistrict} from './aravan-district'
+export {AlayDistrict} from './alay-district'
+export {ChonAlayDistrict} from './chon-alay-district'
+export {KaraKuljaDistrict} from './kara-kulja-district'
+export {KaraSuuDistrict} from './kara-suu-district'
+export {NookatDistrict} from './nookat-district'
+export {OzgonDistrict} from './ozgon-district'

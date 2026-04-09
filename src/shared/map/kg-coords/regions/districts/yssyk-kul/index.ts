@@ -1,0 +1,6 @@
+export {JetiOguzDistrict} from './jeti-oguz-district'
+export {AkSuuDistrict} from './ak-suu-district'
+export {TonDistrict} from './ton-district'
+export {TupDistrict} from './tup-district'
+export {YssykKulDistrict} from './yssyk-kul-district'
+export {YssykKul} from './yssyk-kul'
