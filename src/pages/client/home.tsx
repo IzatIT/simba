@@ -152,7 +152,7 @@ export const Home: React.FC = () => {
                         className="inline-block mb-6"
                     >
                         <span className="px-4 py-2 bg-white/20 backdrop-blur-md rounded-full text-sm tracking-wider">
-                            ✦ Добро пожаловать в Le Simba ✦
+                            ✦ Добро пожаловать Конокбекова Сымбат ✦
                         </span>
                     </motion.div>
 
@@ -172,8 +172,7 @@ export const Home: React.FC = () => {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.9 }}
                     >
-                        Изысканная французская кухня в уютной атмосфере.
-                        Попробуйте наши фирменные блюда от шеф-повара.
+                        Искусство вкуса - простить глупости и продолжать любить даже самые неприятные ситуации
                     </motion.p>
 
                     <motion.div
@@ -202,7 +201,7 @@ export const Home: React.FC = () => {
                             </motion.button>
                         </Link>
 
-                        <Link to="/menu">
+                        <Link to="/breakfast">
                             <motion.button
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
@@ -807,7 +806,7 @@ export const Home: React.FC = () => {
                                 <div className="p-2 bg-accent-500/20 rounded-full group-hover:bg-accent-500/30 transition-colors">
                                     <Phone className="w-5 h-5 text-accent-400" />
                                 </div>
-                                <span className="text-gray-200">+996 312 212 212</span>
+                                <span className="text-gray-200">+996 703 530 377</span>
                             </motion.div>
 
                             <motion.div

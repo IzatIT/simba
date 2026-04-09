@@ -305,7 +305,7 @@ export const Reservations: React.FC = () => {
                                                             value={formData.phone}
                                                             onChange={(e) => setFormData({...formData, phone: e.target.value})}
                                                             className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-accent-500 focus:border-transparent transition-all"
-                                                            placeholder="+996 312 212 212"
+                                                            placeholder="+996 703 530 377"
                                                         />
                                                     </div>
                                                 </div>
@@ -612,7 +612,7 @@ export const Reservations: React.FC = () => {
                                         </div>
                                         <div>
                                             <p className="font-medium">Телефон</p>
-                                            <p className="text-sm text-gray-500">+996 312 212 212</p>
+                                            <p className="text-sm text-gray-500">+996 703 530 377</p>
                                         </div>
                                     </div>
 

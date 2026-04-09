@@ -1,14 +1,12 @@
 import { useState } from 'react';
 import {Outlet, NavLink, useNavigate, Navigate} from 'react-router-dom';
 import {
-    UserCircleIcon,
     SettingsIcon,
     GridIcon,
     TagIcon,
     UtensilsIcon,
     CalendarIcon,
     LogOutIcon,
-    SearchIcon,
 } from 'lucide-react';
 import {useQueryClient} from "@tanstack/react-query";
 import {Storage} from "../../shared/utils/storage.ts";
@@ -95,14 +93,7 @@ const AdminPanel = () => {
                 <header className="bg-white shadow-sm sticky top-0 z-10">
                     <div className="flex items-center justify-between px-6 py-4">
                         <div className="flex-1 max-w-md">
-                            <div className="relative">
-                                <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                <input
-                                    type="text"
-                                    placeholder="Поиск..."
-                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                                />
-                            </div>
+
                         </div>
 
                         <div className="flex items-center space-x-4">

@@ -80,8 +80,8 @@ export const Header: React.FC = () => {
 
     // Социальные сети
     const socialLinks = [
-        { icon: <Instagram className="w-4 h-4" />, url: 'https://instagram.com', label: 'Instagram' },
-        { icon: <MessageCircle className="w-4 h-4" />, url: 'https://wa.me/79991234567', label: 'WhatsApp' },
+        { icon: <Instagram className="w-4 h-4" />, url: 'https://www.instagram.com/__s1mona__/', label: 'Instagram' },
+        { icon: <MessageCircle className="w-4 h-4" />, url: 'https://wa.me/996703530377', label: 'WhatsApp' },
         { icon: <Send className="w-4 h-4" />, url: 'https://t.me/lebistrot', label: 'Telegram' },
     ];
 
@@ -199,7 +199,7 @@ export const Header: React.FC = () => {
                         <div className="hidden lg:flex items-center gap-4">
                             {/* Телефон */}
                             <a
-                                href="tel:+996312212121"
+                                href="tel:+996703530377"
                                 className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${
                                     isScrolled
                                         ? 'bg-accent-500 text-black hover:bg-accent-600'
@@ -207,7 +207,7 @@ export const Header: React.FC = () => {
                                 }`}
                             >
                                 <Phone className="w-4 h-4" />
-                                <span className="font-medium">+996 312 212 212</span>
+                                <span className="font-medium">+996 703 530 377</span>
                             </a>
 
                             {/* Социальные сети */}

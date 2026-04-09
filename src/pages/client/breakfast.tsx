@@ -120,9 +120,9 @@ export const Breakfast: React.FC = () => {
                             <h1 className="text-3xl sm:text-5xl md:text-6xl font-display font-bold mb-4">
                                 Завтраки
                             </h1>
-                            <div className="relative inline-block px-8 py-3 group">
+                            <div className="relative inline-block px-0 py-3 group">
                                 {/* Верхняя изогнутая линия */}
-                                <svg className="absolute -top-2 left-10 w-full h-5" preserveAspectRatio="none">
+                                <svg className="absolute -top-2 left-0 w-full h-5" preserveAspectRatio="none">
                                     <path
                                         d="M0,10 Q30,0 60,10 Q90,20 120,10 Q150,0 180,10 Q210,20 240,10 Q270,0 300,10"
                                         stroke="#fecaca"
@@ -133,7 +133,7 @@ export const Breakfast: React.FC = () => {
                                 </svg>
 
                                 {/* Нижняя изогнутая линия */}
-                                <svg className="absolute -bottom-2 left-10 w-full h-5" preserveAspectRatio="none">
+                                <svg className="absolute -bottom-2 left-0 w-full h-5" preserveAspectRatio="none">
                                     <path
                                         d="M0,10 Q30,20 60,10 Q90,0 120,10 Q150,20 180,10 Q210,0 240,10 Q270,20 300,10"
                                         stroke="#fecaca"
@@ -143,27 +143,6 @@ export const Breakfast: React.FC = () => {
                                     />
                                 </svg>
 
-                                {/* Левая ветка */}
-                                <div className="absolute -left-6 top-1/2 -translate-y-1/2 opacity-50 group-hover:opacity-100 transition-opacity duration-300">
-                                    <svg width="24" height="50" viewBox="0 0 24 50" fill="none">
-                                        <path d="M12,0 Q4,12 12,25 Q20,38 12,50" stroke="#fca5a5" strokeWidth="1.2" fill="none"/>
-                                        <circle cx="8" cy="10" r="2" fill="#fecaca" opacity="0.6"/>
-                                        <circle cx="16" cy="20" r="1.5" fill="#fecaca" opacity="0.5"/>
-                                        <circle cx="9" cy="32" r="2" fill="#fecaca" opacity="0.6"/>
-                                        <circle cx="15" cy="42" r="1.5" fill="#fecaca" opacity="0.5"/>
-                                    </svg>
-                                </div>
-
-                                {/* Правая ветка */}
-                                <div className="absolute -right-6 top-1/2 -translate-y-1/2 opacity-50 group-hover:opacity-100 transition-opacity duration-300">
-                                    <svg width="24" height="50" viewBox="0 0 24 50" fill="none">
-                                        <path d="M12,0 Q20,12 12,25 Q4,38 12,50" stroke="#fca5a5" strokeWidth="1.2" fill="none"/>
-                                        <circle cx="16" cy="10" r="2" fill="#fecaca" opacity="0.6"/>
-                                        <circle cx="8" cy="20" r="1.5" fill="#fecaca" opacity="0.5"/>
-                                        <circle cx="15" cy="32" r="2" fill="#fecaca" opacity="0.6"/>
-                                        <circle cx="9" cy="42" r="1.5" fill="#fecaca" opacity="0.5"/>
-                                    </svg>
-                                </div>
 
                                 {/* Текст с тонкими линиями по бокам */}
                                 <div className="flex items-center gap-4">
@@ -403,7 +382,6 @@ export const Breakfast: React.FC = () => {
                 </div>
             </section>
 
-            {/* Модальное окно деталей блюда */}
             <AnimatePresence>
                 {selectedItem && (
                     <motion.div
@@ -457,12 +435,12 @@ export const Breakfast: React.FC = () => {
                                 <p className="text-gray-700 mb-6">{selectedItem.description}</p>
 
                                 <div className="grid grid-cols-2 gap-4 mb-6">
-                                    <div className="bg-gray-50 rounded-xl p-3 text-center">
+                                    <div className="bg-gray-200 rounded-xl p-3 text-center">
                                         <Clock className="w-5 h-5 text-accent-500 mx-auto mb-1" />
                                         <div className="text-sm text-gray-500">Время</div>
                                         <div className="font-medium">{selectedItem.cookingTime} мин</div>
                                     </div>
-                                    <div className="bg-gray-50 rounded-xl p-3 text-center">
+                                    <div className="bg-gray-200 rounded-xl p-3 text-center">
                                         <Flame className="w-5 h-5 text-accent-500 mx-auto mb-1" />
                                         <div className="text-sm text-gray-500">Калории</div>
                                         <div className="font-medium">{selectedItem.calories} ккал</div>

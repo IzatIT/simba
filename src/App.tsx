@@ -11,8 +11,11 @@ import AdminLogin from "./pages/admin/login.tsx";
 import {QueryClientProvider} from "@tanstack/react-query";
 import {QueryClient} from "@tanstack/query-core";
 import AdminPanel from "./layouts/admin-layout/panel.tsx";
-import {AdminProfile} from "./pages/admin/profile.tsx";
 import {AdminConfiguration} from "./pages/admin/configuration.tsx";
+import {AdminMenuCategories} from "./pages/admin/categories.tsx";
+import {AdminProductTags} from "./pages/admin/tags.tsx";
+import {AdminMenu} from "./pages/admin/menu.tsx";
+import {AdminBookings} from "./pages/admin/booking.tsx";
 
 const queryClient = new QueryClient()
 
@@ -38,6 +41,10 @@ function App() {
             </Route>
             <Route element={<AdminPanel/>}>
                 <Route path="/admin/profile" element={<AdminConfiguration/>}/>
+                <Route path="/admin/categories" element={<AdminMenuCategories/>}/>
+                <Route path="/admin/tags" element={<AdminProductTags/>}/>
+                <Route path="/admin/menu" element={<AdminMenu/>}/>
+                <Route path="/admin/book" element={<AdminBookings/>}/>
             </Route>
         </Routes>
         </QueryClientProvider>

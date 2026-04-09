@@ -30,11 +30,11 @@ interface ConfigurationFormData {
     logo: File[];
     title: string;
     subtitle: string;
-    phoneNumber: string[] | null;
+    phoneNumber: Array<{ value: string }>;
     Instagram: string | null;
     WhatsApp: string | null;
     telegram: string | null;
-    address: string[];
+    address: Array<{ value: string }>;
     addressLink: string;
     email: string | null;
     worktime: {
@@ -61,7 +61,7 @@ interface ConfigurationFormData {
         title: string;
         subtitle: string;
         img: File;
-        awards: string[];
+        awards: Array<{ value: string }>;
     };
     events: Array<{
         img: File;
@@ -81,8 +81,8 @@ export const AdminConfiguration = () => {
     const queryClient = useQueryClient();
     const { register, control, handleSubmit, reset, setValue, watch } = useForm<ConfigurationFormData>({
         defaultValues: {
-            phoneNumber: [''],
-            address: [''],
+            phoneNumber: [],
+            address: [],
             worktime: {
                 is24Hour: false,
                 data: [
@@ -102,19 +102,19 @@ export const AdminConfiguration = () => {
             photoGallery: [],
             events: [],
             person: {
-                awards: ['']
+                awards: []
             }
         }
     });
 
     const { fields: phoneFields, append: appendPhone, remove: removePhone } = useFieldArray({
         control,
-        name: 'phoneNumber'
+        name: 'phoneNumber' as const
     });
 
     const { fields: addressFields, append: appendAddress, remove: removeAddress } = useFieldArray({
         control,
-        name: 'address'
+        name: 'address' as const
     });
 
     const { fields: statisticFields, append: appendStatistic, remove: removeStatistic } = useFieldArray({
@@ -142,8 +142,7 @@ export const AdminConfiguration = () => {
         name: 'person.awards'
     });
 
-    // Загрузка конфигурации
-    const { data: config, isLoading } = useQuery({
+    const {  isLoading } = useQuery({
         queryKey: ['configuration'],
         queryFn: async () => {
             const response = await apiClient.get('/admin/configuration');
@@ -324,7 +323,7 @@ export const AdminConfiguration = () => {
                     </div>
                 ))}
                 {isEditing && (
-                    <button type="button" onClick={() => appendPhone('')} className="text-sm text-amber-600 hover:text-amber-700">
+                    <button type="button" onClick={() => appendPhone({value: ""})} className="text-sm text-amber-600 hover:text-amber-700">
                         + Добавить телефон
                     </button>
                 )}
@@ -392,7 +391,7 @@ export const AdminConfiguration = () => {
                     </div>
                 ))}
                 {isEditing && (
-                    <button type="button" onClick={() => appendAddress('')} className="text-sm text-amber-600 hover:text-amber-700">
+                    <button type="button" onClick={() => appendAddress({value: ""})} className="text-sm text-amber-600 hover:text-amber-700">
                         + Добавить адрес
                     </button>
                 )}
@@ -715,7 +714,7 @@ export const AdminConfiguration = () => {
                     </div>
                 ))}
                 {isEditing && (
-                    <button type="button" onClick={() => appendAward('')} className="text-sm text-amber-600">
+                    <button type="button" onClick={() => appendAward({value: ""})} className="text-sm text-amber-600">
                         + Добавить награду
                     </button>
                 )}

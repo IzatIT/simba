@@ -25,8 +25,8 @@ export const Contacts: React.FC = () => {
 
     const contacts = {
         phones: [
-            { number: '+996 312 212 212', label: 'Бронирование' },
-            { number: '+996 312 211 211', label: 'Администрация' }
+            { number: '+996 703 530 377', label: 'Бронирование' },
+            { number: '+996 703 530 377', label: 'Администрация' }
         ],
         address: 'ул. Ресторанная, 1, Бишкек',
         email: 'info@simba.kg',
@@ -39,13 +39,13 @@ export const Contacts: React.FC = () => {
             {
                 icon: <Instagram className="w-5 h-5" />,
                 label: 'Instagram',
-                url: 'https://instagram.com/lebistrot',
+                url: 'https://www.instagram.com/__s1mona__/',
                 color: 'from-pink-500 to-orange-500'
             },
             {
                 icon: <MessageCircle className="w-5 h-5" />,
                 label: 'WhatsApp',
-                url: 'https://wa.me/996312212212',
+                url: 'https://wa.me/996703530377',
                 color: 'from-green-500 to-teal-500'
             },
             {

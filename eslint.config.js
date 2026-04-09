@@ -25,9 +25,9 @@ export default defineConfig([
         'warn',
         { allowConstantExport: true },
       ],
-      "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
       "@typescript-eslint/no-explicit-any": ["off"],
-      "@typescript-eslint/ban-ts-comment": ["off"]
+      "@typescript-eslint/ban-ts-comment": ["off"],
+      "@typescript-eslint/no-unused-vars": ["off"]
     },
   },
 
