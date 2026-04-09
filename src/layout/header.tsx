@@ -46,7 +46,11 @@ export const Header: React.FC = () => {
                 { path: '/#chef', label: 'Шеф-повар' },
                 { path: '/#events', label: 'События' },
             ]},
-        { path: '/menu', label: 'Меню', icon: <Utensils className="w-4 h-4" /> },
+        { path: '/menu', label: 'Меню', icon: <Utensils className="w-4 h-4" />,
+            dropdown: [
+                { path: '/breakfast', label: 'Завтраки' },
+                { path: '/menu', label: 'Все меню' },
+            ]},
         { path: '/reservations', label: 'Бронирование', icon: <Calendar className="w-4 h-4" /> },
         { path: '/contacts', label: 'Контакты', icon: <Mail className="w-4 h-4" /> },
     ];

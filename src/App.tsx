@@ -6,6 +6,7 @@ import {Layout} from "./layout";
 import {Menu} from "./pages/menu.tsx";
 import {Cart} from "./pages/cart.tsx";
 import {useEffect} from "react";
+import {Breakfast} from "./pages/breakfast.tsx";
 
 function App() {
     const {pathname} = useLocation()
@@ -20,6 +21,7 @@ function App() {
              <Route path="/reservations" element={<Reservations/>}/>
              <Route path="/contacts" element={<Contacts/>}/>
              <Route path="/menu" element={<Menu/>}/>
+             <Route path="/breakfast" element={<Breakfast/>}/>
              <Route path="/cart" element={<Cart/>}/>
          </Route>
       </Routes>

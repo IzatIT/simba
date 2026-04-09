@@ -258,7 +258,7 @@ export const Cart: React.FC = () => {
                     <p className="text-white mb-8">
                         Добавьте блюда из нашего меню, чтобы оформить заказ
                     </p>
-                    <Link to="/menu">
+                    <Link to="/breakfast">
                         <button className="px-8 py-4 bg-gray-500 text-white cursor-pointer rounded-xl font-medium hover:bg-gray-600 transition-colors inline-flex items-center gap-2">
                             <ArrowRight className="w-5 h-5" />
                             Перейти в меню
