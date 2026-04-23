@@ -1,14 +1,17 @@
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
-import {useEffect, useState} from "react";
+import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import {authService, type LoginCredentials} from "../../entities/auth/api.ts";
-import {Storage} from "../../shared/utils/storage.ts";
+import {authService, type LoginCredentials} from "../../../entities/auth/api.ts";
+import {Storage} from "../../../shared/utils/storage.ts";
+import {resetRefreshCounter} from "../../../shared/api/api.ts";
+import "./login.css"
 
 
 const AdminLogin = () => {
     const navigate = useNavigate();
     const [showPassword, setShowPassword] = useState(false);
+    const [isCheckingAuth, setIsCheckingAuth] = useState(true); // Состояние проверки авторизации
 
     const {
         register,
@@ -17,7 +20,7 @@ const AdminLogin = () => {
         setError,
     } = useForm<LoginCredentials>({
         defaultValues: {
-            login: "",
+            email: "",
             password: "",
             rememberMe: false,
         },
@@ -25,21 +28,27 @@ const AdminLogin = () => {
 
     const loginMutation = useMutation({
         mutationFn: async (data: LoginCredentials) => {
-            const res = await authService.login(data)
+            const res = await authService.login(data);
             const daysToExpire = data.rememberMe ? 30 : 1;
-            Storage.setItem("ACCESS_TOKEN", res.accessToken);
-            Storage.setItem("REFRESH_TOKEN", res.refreshToken, daysToExpire)
-            navigate("/admin/profile", { replace: true });
+            Storage.setItem("ACCESS_TOKEN", res.data.accessToken, daysToExpire);
+            resetRefreshCounter(); // Сброс счетчика при успешном входе
+            return res;
+        },
+        onSuccess: (res) => {
+            // Редирект после успешного входа
+            if (res.data.user.role === "ADMIN" || res.data.user.role === "SUPER_ADMIN") {
+                navigate("/admin/profile", { replace: true });
+            } else if (res.data.user.role === "MANAGER") {
+                navigate("/admin/book", { replace: true });
+            } else {
+                navigate("/admin/profile", { replace: true });
+            }
         },
         onError: (error: any) => {
-            //TODO
-            Storage.setItem("ACCESS_TOKEN", "HEEEEEE");
-            navigate("/admin/profile", { replace: true });
-            setError("root", {
-                message: error.message || "Неверный email или пароль",
-            });
-        }
-
+            const message =
+                error?.response?.data?.message || error?.message || "Неверный email или пароль";
+            setError("root", { message });
+        },
     });
 
     const onSubmit = (data: LoginCredentials) => {
@@ -47,11 +56,63 @@ const AdminLogin = () => {
     };
 
     useEffect(() => {
-        const accessToken = Storage.getItem("ACCESS_TOKEN");
-        if (accessToken) {
-            navigate("/admin/profile", { replace: true });
-        }
-    }, [])
+        const checkAuth = async () => {
+            setIsCheckingAuth(true);
+            try {
+                const token = Storage.getItem("ACCESS_TOKEN");
+                if (!token) {
+                    setIsCheckingAuth(false);
+                    return;
+                }
+
+                const user = await authService.getCurrentUser();
+                resetRefreshCounter();
+
+                if (user && user.role) {
+                    if (user.role === "ADMIN" || user.role === "SUPER_ADMIN") {
+                        navigate("/admin/profile", { replace: true });
+                        return;
+                    } else if (user.role === "MANAGER") {
+                        navigate("/admin/book", { replace: true });
+                        return;
+                    }
+                }
+            } catch (error) {
+                // Если ошибка при получении пользователя, очищаем токены
+                console.error("Auth check failed:", error);
+                Storage.removeItem("ACCESS_TOKEN");
+                Storage.removeItem("REFRESH_TOKEN");
+            } finally {
+                setIsCheckingAuth(false);
+            }
+        };
+
+        checkAuth();
+    }, [navigate]);
+
+    // Показываем лоадер во время проверки авторизации
+    if (isCheckingAuth) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 flex items-center justify-center p-4">
+                <div className="relative">
+                    <div className="absolute inset-0 bg-gradient-to-r from-amber-500 to-orange-600 rounded-full blur-xl opacity-20 animate-pulse" />
+                    <div className="relative bg-white/80 backdrop-blur-xl rounded-2xl shadow-2xl p-8 border border-white/20">
+                        <div className="flex flex-col items-center space-y-4">
+                            <div className="relative">
+                                <div className="animate-spin h-12 w-12 border-4 border-amber-500 border-t-transparent rounded-full" />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="w-4 h-4 bg-amber-500 rounded-full animate-pulse" />
+                                </div>
+                            </div>
+                            <p className="text-gray-600 font-medium">Проверка авторизации...</p>
+                            <p className="text-xs text-gray-400">Пожалуйста, подождите</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -61,17 +122,35 @@ const AdminLogin = () => {
             </div>
 
             <div className="relative z-10 w-full max-w-md">
-                <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-2xl p-8 border border-white/20">
+                <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-2xl p-8 border border-white/20 animate-in fade-in zoom-in duration-300">
                     <div className="text-center mb-8">
+                        <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-r from-amber-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg">
+                            <svg
+                                className="w-8 h-8 text-white"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                                />
+                            </svg>
+                        </div>
                         <h1 className="text-2xl font-bold text-gray-800 mb-2">
                             Вход в панель управления
                         </h1>
+                        <p className="text-sm text-gray-500">
+                            Введите свои учетные данные для доступа
+                        </p>
                     </div>
 
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Логин
+                                Email
                             </label>
                             <div className="relative">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -90,18 +169,23 @@ const AdminLogin = () => {
                                     </svg>
                                 </div>
                                 <input
-                                    type="string"
-                                    {...register("login", {
-                                        required: "Логин обязателен",
+                                    type="email"
+                                    {...register("email", {
+                                        required: "Email обязателен",
+                                        pattern: {
+                                            value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                                            message: "Введите корректный email",
+                                        },
                                     })}
                                     className={`w-full pl-10 pr-3 py-3 border ${
-                                        errors.login ? "border-red-500" : "border-gray-300"
+                                        errors.email ? "border-red-500" : "border-gray-300"
                                     } rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200`}
-                                    placeholder="itilekuulu"
+                                    placeholder="admin@restaurant.com"
+                                    autoComplete="email"
                                 />
                             </div>
-                            {errors.login && (
-                                <p className="mt-1 text-sm text-red-600">{errors.login.message}</p>
+                            {errors.email && (
+                                <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
                             )}
                         </div>
 
@@ -138,6 +222,7 @@ const AdminLogin = () => {
                                         errors.password ? "border-red-500" : "border-gray-300"
                                     } rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all duration-200`}
                                     placeholder="••••••"
+                                    autoComplete="current-password"
                                 />
                                 <button
                                     type="button"
@@ -169,7 +254,7 @@ const AdminLogin = () => {
                                                 strokeLinecap="round"
                                                 strokeLinejoin="round"
                                                 strokeWidth={2}
-                                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                                d="M15 12a4 4 0 11-8 0 4 4 0 018 0z"
                                             />
                                             <path
                                                 strokeLinecap="round"
@@ -199,7 +284,7 @@ const AdminLogin = () => {
                         </div>
 
                         {errors.root && (
-                            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                            <div className="p-3 bg-red-50 border border-red-200 rounded-lg animate-in fade-in slide-in-from-top-2 duration-200">
                                 <p className="text-sm text-red-600 text-center">
                                     {errors.root.message}
                                 </p>
@@ -250,24 +335,6 @@ const AdminLogin = () => {
                     </div>
                 </div>
             </div>
-
-            <style>{`
-        @keyframes blob {
-          0% { transform: translate(0px, 0px) scale(1); }
-          33% { transform: translate(30px, -50px) scale(1.1); }
-          66% { transform: translate(-20px, 20px) scale(0.9); }
-          100% { transform: translate(0px, 0px) scale(1); }
-        }
-        .animate-blob {
-          animation: blob 7s infinite;
-        }
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-        .animation-delay-4000 {
-          animation-delay: 4s;
-        }
-      `}</style>
         </div>
     );
 };

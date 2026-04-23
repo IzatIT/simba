@@ -18,10 +18,29 @@ import {
 
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import {type MenuItem} from "./menu-data.tsx";
 import {breakfastData} from "./breakfast-data.tsx";
 
-
+interface MenuItem {
+    id: number;
+    name: string;
+    nameEn: string;
+    description: string;
+    ingredients: string[];
+    price: number;
+    oldPrice?: number;
+    rating: number;
+    ratingCount: number;
+    image: string;
+    category: string;
+    tags: string[];
+    calories: number;
+    cookingTime: number;
+    isSpicy?: boolean;
+    isVegetarian?: boolean;
+    isGlutenFree?: boolean;
+    isPopular?: boolean;
+    isNew?: boolean;
+}
 interface CartItem extends MenuItem {
     quantity: number;
 }

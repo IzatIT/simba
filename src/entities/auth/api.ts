@@ -1,51 +1,27 @@
-// api/authService.ts
-
-import apiClient from "../../shared/api/api.ts";
+import apiClient from '../../shared/api/api.ts';
+import { Path } from '../../shared/api/path.ts';
+import type { LoginResult, AdminUser } from '../../shared/api/types.ts';
 
 export interface LoginCredentials {
-    login: string;
+    email: string;
     password: string;
     rememberMe?: boolean;
 }
 
-export interface LoginResponse {
-    accessToken: string;
-    refreshToken: string;
-    user: {
-        id: string;
-        email: string;
-        name: string;
-        role: string;
-    };
-}
-
-interface RefreshTokenResponse {
-    accessToken: string;
-    refreshToken: string;
-}
-
-interface LogoutResponse {
-    message: string;
-}
-
+// После axios-интерцептора response.data уже без конверта { success, data }
 export const authService = {
-    login: async (credentials: LoginCredentials): Promise<LoginResponse> => {
-        const response = await apiClient.post<LoginResponse>('/auth/login', credentials);
+    login: async (credentials: LoginCredentials): Promise<LoginResult> => {
+        const { email, password } = credentials;
+        const response = await apiClient.post<LoginResult>(Path.Auth.Login, { email, password });
         return response.data;
     },
 
-    refreshToken: async (refreshToken: string): Promise<RefreshTokenResponse> => {
-        const response = await apiClient.post<RefreshTokenResponse>('/auth/refresh', { refreshToken });
-        return response.data;
+    logout: async (): Promise<void> => {
+        await apiClient.post(Path.Auth.Logout);
     },
 
-    logout: async (): Promise<LogoutResponse> => {
-        const response = await apiClient.post<LogoutResponse>('/auth/logout');
-        return response.data;
-    },
-
-    getCurrentUser: async () => {
-        const response = await apiClient.get('/auth/me');
-        return response.data;
+    getCurrentUser: async (): Promise<AdminUser> => {
+        const response = await apiClient.get<{data: AdminUser}>(Path.Auth.Me);
+        return response.data.data;
     },
 };

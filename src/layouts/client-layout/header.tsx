@@ -13,8 +13,33 @@ import {
     Instagram,
     MessageCircle,
     Send,
-    Star
+    Star,
+    ShoppingCart,
 } from 'lucide-react';
+import { usePublicConfig } from '../../entities/public-config/api.ts';
+import { selectCartCount, useCartStore } from '../../entities/cart/store.ts';
+
+const FALLBACK_BRAND = { title: '', subtitle: '' };
+
+function formatWorkingHours(
+    items?: { dayKey: string; openTime: string | null; closeTime: string | null; isClosed: boolean }[],
+    is24Hours?: boolean,
+): string {
+    if (is24Hours) return 'Круглосуточно';
+    if (!items?.length) return '';
+    const open = items.filter((i) => !i.isClosed && i.openTime && i.closeTime);
+    if (open.length === 0) return '';
+    const allSame =
+        open.length === 7 &&
+        open.every((i) => i.openTime === open[0].openTime && i.closeTime === open[0].closeTime);
+    if (allSame) return `Ежедневно ${open[0].openTime} - ${open[0].closeTime}`;
+    return `${open[0].openTime} - ${open[0].closeTime}`;
+}
+
+// Только tel: — чистим телефон от всего кроме + и цифр.
+function telHref(phone: string): string {
+    return `tel:${phone.replace(/[^\d+]/g, '')}`;
+}
 
 export const Header: React.FC = () => {
     const [isScrolled, setIsScrolled] = useState(false);
@@ -22,6 +47,18 @@ export const Header: React.FC = () => {
     const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
     const location = useLocation();
     const navigate = useNavigate();
+    const { data: config } = usePublicConfig();
+    const cartCount = useCartStore(selectCartCount);
+
+    const brandTitle = config?.siteTitle ?? FALLBACK_BRAND.title;
+    const brandSubtitle = config?.siteSubtitle ?? FALLBACK_BRAND.subtitle;
+    const phone = config?.phoneNumbers?.[0] || "";
+    const instagramUrl = config?.socialLinks?.instagram ?? null;
+    const whatsappUrl = config?.socialLinks?.whatsapp ?? null;
+    const telegramUrl = config?.socialLinks?.telegram ?? null;
+    const workingHours = formatWorkingHours(config?.worktimeItems, config?.is24Hours);
+    const logoUrl =
+        config?.siteConfigMedia?.find((m) => m.slot === 'LOGO')?.media?.url ?? '/logo.png';
     // Отслеживание скролла
     useEffect(() => {
         const handleScroll = () => {
@@ -48,8 +85,8 @@ export const Header: React.FC = () => {
             ]},
         { path: '/menu', label: 'Меню', icon: <Utensils className="w-4 h-4" />,
             dropdown: [
-                { path: '/breakfast', label: 'Завтраки' },
-                { path: '/menu', label: 'Все меню' },
+                // { path: '/breakfast', label: 'Завтраки' },
+                // { path: '/menu', label: 'Все меню' },
             ]},
         { path: '/reservations', label: 'Бронирование', icon: <Calendar className="w-4 h-4" /> },
         { path: '/contacts', label: 'Контакты', icon: <Mail className="w-4 h-4" /> },
@@ -78,12 +115,12 @@ export const Header: React.FC = () => {
         setIsMobileMenuOpen(false);
     };
 
-    // Социальные сети
+    // Социальные сети — из API. Скрываем пустые.
     const socialLinks = [
-        { icon: <Instagram className="w-4 h-4" />, url: 'https://www.instagram.com/__s1mona__/', label: 'Instagram' },
-        { icon: <MessageCircle className="w-4 h-4" />, url: 'https://wa.me/996703530377', label: 'WhatsApp' },
-        { icon: <Send className="w-4 h-4" />, url: 'https://t.me/lebistrot', label: 'Telegram' },
-    ];
+        instagramUrl && { icon: <Instagram className="w-4 h-4" />, url: instagramUrl, label: 'Instagram' },
+        whatsappUrl && { icon: <MessageCircle className="w-4 h-4" />, url: whatsappUrl, label: 'WhatsApp' },
+        telegramUrl && { icon: <Send className="w-4 h-4" />, url: telegramUrl, label: 'Telegram' },
+    ].filter(Boolean) as Array<{ icon: React.ReactNode; url: string; label: string }>;
 
     return (
         <>
@@ -105,7 +142,11 @@ export const Header: React.FC = () => {
                             >
                                 {/* Иконка-логотип */}
                                 <div className="relative">
-                                    <img className={`w-12 h-12 rounded-2xl shadow-lg group-hover:shadow-xl transition-all`} src="/logo.png"/>
+                                    <img
+                                        className={`w-12 h-12 rounded-2xl shadow-lg group-hover:shadow-xl transition-all`}
+                                        src={logoUrl}
+                                        alt={brandTitle}
+                                    />
 
                                     {/* Декоративная точка */}
                                     <div className="absolute -top-1 -right-1 w-3 h-3 bg-accent-300 rounded-full animate-ping" />
@@ -116,12 +157,12 @@ export const Header: React.FC = () => {
                                     <h1 className={`font-display font-bold text-xl leading-tight transition-colors ${
                                         isScrolled ? 'text-gray-900' : 'text-white'
                                     }`}>
-                                        Love Simba
+                                        {brandTitle}
                                     </h1>
                                     <p className={`text-xs tracking-wider transition-colors ${
                                         isScrolled ? 'text-gray-500' : 'text-white/80'
                                     }`}>
-                                        FRENCH CUISINE
+                                        {brandSubtitle}
                                     </p>
                                 </div>
                             </motion.div>
@@ -136,7 +177,7 @@ export const Header: React.FC = () => {
                                     onMouseEnter={() => link.dropdown && setActiveDropdown(link.label)}
                                     onMouseLeave={() => setActiveDropdown(null)}
                                 >
-                                    {link.dropdown ? (
+                                    {link.dropdown && link.dropdown.length > 0 ? (
                                         // Ссылка с выпадающим меню
                                         <button
                                             className={`flex items-center gap-1 px-4 py-2 rounded-full font-medium transition-all ${
@@ -172,7 +213,7 @@ export const Header: React.FC = () => {
                                         </Link>
                                     )}
 
-                                    {link.dropdown && activeDropdown === link.label && (
+                                    {link.dropdown  && link.dropdown.length > 0 && activeDropdown === link.label && (
                                         <motion.div
                                             initial={{ opacity: 0, y: 10 }}
                                             animate={{ opacity: 1, y: 0 }}
@@ -197,9 +238,29 @@ export const Header: React.FC = () => {
 
                         {/* Контактная информация и соцсети */}
                         <div className="hidden lg:flex items-center gap-4">
+                            {/* Корзина */}
+                            <Link to="/cart" aria-label="Корзина">
+                                <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    className={`relative p-2.5 rounded-full transition-all ${
+                                        isScrolled
+                                            ? 'text-gray-700 hover:text-accent-600 hover:bg-accent-50'
+                                            : 'text-white/90 hover:text-white hover:bg-white/10'
+                                    }`}
+                                >
+                                    <ShoppingCart className="w-5 h-5" />
+                                    {cartCount > 0 && (
+                                        <span className="absolute -top-1 -right-1 min-w-[1.25rem] h-5 px-1 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                                            {cartCount}
+                                        </span>
+                                    )}
+                                </motion.button>
+                            </Link>
+
                             {/* Телефон */}
                             <a
-                                href="tel:+996703530377"
+                                href={telHref(phone)}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${
                                     isScrolled
                                         ? 'bg-accent-500 text-black hover:bg-accent-600'
@@ -207,7 +268,7 @@ export const Header: React.FC = () => {
                                 }`}
                             >
                                 <Phone className="w-4 h-4" />
-                                <span className="font-medium">+996 703 530 377</span>
+                                <span className="font-medium">{phone}</span>
                             </a>
 
                             {/* Социальные сети */}
@@ -233,21 +294,34 @@ export const Header: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Кнопка мобильного меню */}
-                        <button
-                            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                            className={`lg:hidden p-2 rounded-lg transition-colors ${
-                                isScrolled
-                                    ? 'text-gray-700 hover:bg-gray-100'
-                                    : 'text-white hover:bg-white/10'
-                            }`}
-                        >
-                            {isMobileMenuOpen ? (
-                                <X className="w-6 h-6" />
-                            ) : (
-                                <Menu className="w-6 h-6" />
-                            )}
-                        </button>
+                        {/* Мобильная часть: корзина + бургер */}
+                        <div className="lg:hidden flex items-center gap-2">
+                            <Link to="/cart" aria-label="Корзина">
+                                <button
+                                    className={`relative p-2 rounded-lg transition-colors ${
+                                        isScrolled ? 'text-gray-700 hover:bg-gray-100' : 'text-white hover:bg-white/10'
+                                    }`}
+                                >
+                                    <ShoppingCart className="w-6 h-6" />
+                                    {cartCount > 0 && (
+                                        <span className="absolute -top-1 -right-1 min-w-[1.25rem] h-5 px-1 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                                            {cartCount}
+                                        </span>
+                                    )}
+                                </button>
+                            </Link>
+
+                            <button
+                                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                                className={`p-2 rounded-lg transition-colors ${
+                                    isScrolled
+                                        ? 'text-gray-700 hover:bg-gray-100'
+                                        : 'text-white hover:bg-white/10'
+                                }`}
+                            >
+                                {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -280,12 +354,14 @@ export const Header: React.FC = () => {
                                 {/* Логотип в мобильном меню */}
                                 <div className="flex items-center justify-between mb-8">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-400 to-gray-600 flex items-center justify-center">
-                                            <Utensils className="w-5 h-5 text-white" />
-                                        </div>
+                                        <img
+                                            src={logoUrl}
+                                            alt={brandTitle}
+                                            className="w-10 h-10 rounded-xl object-cover shadow-sm"
+                                        />
                                         <div>
-                                            <h2 className="font-display font-bold text-gray-900">Love Simba</h2>
-                                            <p className="text-xs text-gray-500">FRENCH CUISINE</p>
+                                            <h2 className="font-display font-bold text-gray-900">{brandTitle}</h2>
+                                            <p className="text-xs text-gray-500">{brandSubtitle}</p>
                                         </div>
                                     </div>
                                     <button
@@ -362,44 +438,50 @@ export const Header: React.FC = () => {
                                 {/* Контакты в мобильном меню */}
                                 <div className="border-t border-gray-200 pt-6">
                                     <a
-                                        href="tel:+79991234567"
+                                        href={telHref(phone)}
                                         className="flex items-center justify-center gap-2 w-full bg-accent-500 text-white py-3 rounded-xl font-medium hover:bg-accent-600 transition-colors mb-4"
                                     >
                                         <Phone className="w-5 h-5" />
                                         Позвонить нам
                                     </a>
 
-                                    <a
-                                        href="https://wa.me/79991234567"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center justify-center gap-2 w-full bg-green-500 text-white py-3 rounded-xl font-medium hover:bg-green-600 transition-colors mb-4"
-                                    >
-                                        <MessageCircle className="w-5 h-5" />
-                                        Написать в WhatsApp
-                                    </a>
+                                    {whatsappUrl && (
+                                        <a
+                                            href={whatsappUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center justify-center gap-2 w-full bg-green-500 text-white py-3 rounded-xl font-medium hover:bg-green-600 transition-colors mb-4"
+                                        >
+                                            <MessageCircle className="w-5 h-5" />
+                                            Написать в WhatsApp
+                                        </a>
+                                    )}
 
-                                    <div className="flex justify-center gap-3">
-                                        {socialLinks.map((social) => (
-                                            <a
-                                                key={social.label}
-                                                href={social.url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="p-3 bg-gray-100 text-gray-600 rounded-lg hover:bg-accent-100 hover:text-accent-600 transition-colors"
-                                                aria-label={social.label}
-                                            >
-                                                {social.icon}
-                                            </a>
-                                        ))}
-                                    </div>
+                                    {socialLinks.length > 0 && (
+                                        <div className="flex justify-center gap-3">
+                                            {socialLinks.map((social) => (
+                                                <a
+                                                    key={social.label}
+                                                    href={social.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="p-3 bg-gray-100 text-gray-600 rounded-lg hover:bg-accent-100 hover:text-accent-600 transition-colors"
+                                                    aria-label={social.label}
+                                                >
+                                                    {social.icon}
+                                                </a>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Часы работы */}
-                                <div className="mt-6 p-4 bg-gray-50 rounded-xl">
-                                    <p className="text-sm font-medium text-gray-700 mb-2">Часы работы:</p>
-                                    <p className="text-xs text-gray-500">Ежедневно 12:00 - 00:00</p>
-                                </div>
+                                {workingHours && (
+                                    <div className="mt-6 p-4 bg-gray-50 rounded-xl">
+                                        <p className="text-sm font-medium text-gray-700 mb-2">Часы работы:</p>
+                                        <p className="text-xs text-gray-500">{workingHours}</p>
+                                    </div>
+                                )}
                             </div>
                         </motion.div>
                     </motion.div>

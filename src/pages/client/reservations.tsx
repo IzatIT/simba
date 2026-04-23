@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
     Calendar,
     Clock,
@@ -10,32 +11,92 @@ import {
     ChevronRight,
     ChevronLeft,
     Check,
-    Plus,
-    Minus,
+    CreditCard,
     MapPin,
     AlertCircle,
-    Send
+    Send,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import apiClient from '../../shared/api/api.ts';
+import { Path } from '../../shared/api/path.ts';
+import { usePublicConfig } from '../../entities/public-config/api.ts';
+import type { Product as BackendProduct } from '../../shared/api/types.ts';
+import { MenuCard } from '../../shared/ui/menu-card/menu-card.tsx';
 
-interface MenuItem {
-    id: number;
-    name: string;
-    category: 'starters' | 'main' | 'desserts' | 'wine';
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+interface SelectedItem {
+    productId: string;
+    title: string;
     price: number;
-    description: string;
-}
-
-interface SelectedItem extends MenuItem {
+    subtitle: string;
     quantity: number;
 }
+
+interface BookingCreatedResponse {
+    id: string;
+    bookingNumber: string;
+    status: string;
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function unwrap<T>(raw: unknown): T {
+    const r = raw as { data?: T } & T;
+    return ((r && typeof r === 'object' && 'data' in r ? (r as { data: T }).data : r) as T);
+}
+
+function getErrMsg(err: unknown): string {
+    const e = err as {
+        response?: { data?: { message?: string | string[] }; status?: number };
+        message?: string;
+    };
+    if (e?.response?.status === 429) {
+        return 'Слишком много попыток. Подождите минуту и попробуйте снова.';
+    }
+    const msg = e?.response?.data?.message;
+    if (Array.isArray(msg)) return msg.join(', ');
+    if (typeof msg === 'string') return msg;
+    return e?.message ?? 'Не удалось оформить бронь';
+}
+
+const TIME_SLOTS = [
+    '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
+    '18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30', '22:00',
+];
+
+const toNumber = (v: string | number | null | undefined): number => {
+    if (v == null) return 0;
+    return typeof v === 'string' ? Number(v) : v;
+};
+
+// Маска +996 XXX XXX-XXX. Принимает любой ввод, возвращает отформатированную строку.
+// Идемпотентна: formatKgPhone(formatKgPhone(x)) === formatKgPhone(x).
+function formatKgPhone(input: string): string {
+    // Оставляем только цифры; отсекаем ведущий код страны 996, если введён.
+    const digits = input.replace(/\D/g, '').replace(/^996/, '').slice(0, 9);
+    if (digits.length === 0) return '';
+    const p1 = digits.slice(0, 3);
+    const p2 = digits.slice(3, 6);
+    const p3 = digits.slice(6, 9);
+    let out = '+996';
+    if (digits.length >= 1) out += ' ' + p1;
+    if (digits.length >= 4) out += ' ' + p2;
+    if (digits.length >= 7) out += '-' + p3;
+    return out;
+}
+
+const isKgPhoneComplete = (phone: string): boolean =>
+    phone.replace(/\D/g, '').replace(/^996/, '').length === 9;
+
 
 export const Reservations: React.FC = () => {
     const [step, setStep] = useState(1);
     const [showSuccess, setShowSuccess] = useState(false);
+    const [bookingNumber, setBookingNumber] = useState<string | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
+    const [submitError, setSubmitError] = useState<string | null>(null);
 
-    // Состояние формы
     const [formData, setFormData] = useState({
         name: '',
         phone: '',
@@ -45,104 +106,156 @@ export const Reservations: React.FC = () => {
         additionalRequests: '',
     });
 
-    // Состояние для выбранных блюд
     const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
 
-    // Меню ресторана
-    const menuItems: MenuItem[] = [
-        // Закуски
-        { id: 1, name: 'Устрицы с лимоном', category: 'starters', price: 890, description: 'Свежие устрицы, лимон, соус маринад' },
-        { id: 2, name: 'Фуа-гра с бриошью', category: 'starters', price: 1200, description: 'Фуа-гра, бриошь, ягодный конфитюр' },
-        { id: 3, name: 'Гравлакс из лосося', category: 'starters', price: 750, description: 'Слабосоленый лосось, укропный соус' },
-        { id: 4, name: 'Тартар из говядины', category: 'starters', price: 980, description: 'Говядина, каперсы, лук шалот, перепелиное яйцо' },
+    const { data: config } = usePublicConfig();
 
-        // Основные блюда
-        { id: 5, name: 'Рибай стейк', category: 'main', price: 2450, description: 'Мраморная говядина, розмарин, чесночное масло' },
-        { id: 6, name: 'Утиная грудка', category: 'main', price: 1650, description: 'Утиная грудка, апельсиновый соус, запеченные овощи' },
-        { id: 7, name: 'Лосось на гриле', category: 'main', price: 1790, description: 'Филе лосося, спаржа, голландский соус' },
-        { id: 8, name: 'Ризотто с трюфелем', category: 'main', price: 1450, description: 'Ризотто, трюфельное масло, пармезан' },
-        { id: 9, name: 'Ягненок с розмарином', category: 'main', price: 2150, description: 'Запеченная нога ягненка, тимьян, гратен дофинуа' },
+    const { data: products = [] } = useQuery<BackendProduct[]>({
+        queryKey: ['public-menu-products'],
+        queryFn: async () => {
+            const res = await apiClient.get(Path.PublicMenu.Products, {
+                params: { limit: 100 },
+            });
+            const body = unwrap<{ items?: BackendProduct[] }>(res.data);
+            return body?.items ?? [];
+        },
+        staleTime: 60_000,
+    });
 
-        // Десерты
-        { id: 10, name: 'Крем-брюле', category: 'desserts', price: 590, description: 'Классический крем-брюле с ванилью' },
-        { id: 11, name: 'Шоколадный фондан', category: 'desserts', price: 650, description: 'С жидкой сердцевиной, мороженое' },
-        { id: 12, name: 'Тирамису', category: 'desserts', price: 550, description: 'Кофейный десерт с маскарпоне' },
-        { id: 13, name: 'Сорбет из манго', category: 'desserts', price: 450, description: 'Освежающий сорбет, свежие ягоды' },
+    const { data: categories = [] } = useQuery<Array<{ id: string; slug: string; title: string }>>({
+        queryKey: ['public-menu-categories'],
+        queryFn: async () => {
+            const res = await apiClient.get(Path.PublicMenu.Categories);
+            const body = unwrap<Array<{ id: string; slug: string; title: string }>>(res.data);
+            return Array.isArray(body) ? body : [];
+        },
+        staleTime: 5 * 60_000,
+    });
 
-        // Вина
-        { id: 14, name: 'Шато Марго 2015', category: 'wine', price: 8900, description: 'Красное вино, Бордо, Франция' },
-        { id: 15, name: 'Дом Периньон 2012', category: 'wine', price: 15900, description: 'Шампанское, Франция' },
-        { id: 16, name: 'Кьянти Классико', category: 'wine', price: 3200, description: 'Красное вино, Тоскана, Италия' },
-        { id: 17, name: 'Нойер Бургундер', category: 'wine', price: 2800, description: 'Белое вино, Германия' },
-    ];
+    const filteredMenu = useMemo(() => {
+        if (selectedCategory === 'all') return products;
+        return products.filter((p) => p.category?.slug === selectedCategory);
+    }, [products, selectedCategory]);
 
-    // Доступные временные слоты
-    const timeSlots = [
-        '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
-        '18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30', '22:00'
-    ];
+    // Данные для sidebar из публичного конфига.
+    const phone = config?.phoneNumbers?.[0] ?? '';
+    const address = config?.addresses?.[0] ?? '';
+    // Баннер берём из первой публичной галереи. Fallback — Unsplash.
+    const bannerImage =
+        config?.galleryItems?.[0]?.media?.url ??
+        'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80';
+    const workingHours = useMemo(() => {
+        if (config?.is24Hours) return 'Круглосуточно';
+        const open = (config?.worktimeItems ?? []).filter(
+            (i) => !i.isClosed && i.openTime && i.closeTime,
+        );
+        if (!open.length) return '';
+        const allSame =
+            open.length === 7 &&
+            open.every((i) => i.openTime === open[0].openTime && i.closeTime === open[0].closeTime);
+        return allSame
+            ? `Ежедневно ${open[0].openTime} - ${open[0].closeTime}`
+            : '';
+    }, [config]);
 
-    // Фильтрация меню по категории
-    const filteredMenu = selectedCategory === 'all'
-        ? menuItems
-        : menuItems.filter(item => item.category === selectedCategory);
+    const createBookingMutation = useMutation({
+        mutationFn: async () => {
+            const payload = {
+                date: formData.date,
+                time: formData.time,
+                peopleCount: Number(formData.guests),
+                guestName: formData.name.trim(),
+                contactPhone: formData.phone.trim(),
+                ...(formData.additionalRequests
+                    ? { extraInfo: formData.additionalRequests.trim() }
+                    : {}),
+                ...(selectedItems.length
+                    ? {
+                          preorderItems: selectedItems.map((i) => ({
+                              productId: i.productId,
+                              quantity: i.quantity,
+                          })),
+                      }
+                    : {}),
+            };
+            const res = await apiClient.post<BookingCreatedResponse>(
+                Path.PublicBookings.Create,
+                payload,
+            );
+            return unwrap<BookingCreatedResponse>(res.data);
+        },
+        onSuccess: (booking) => {
+            setBookingNumber(booking.bookingNumber);
+            setShowSuccess(true);
+            setSubmitError(null);
+        },
+        onError: (err) => {
+            setSubmitError(getErrMsg(err));
+        },
+    });
 
-    // Добавление блюда в заказ
-    const addToOrder = (item: MenuItem) => {
-        setSelectedItems(prev => {
-            const existing = prev.find(i => i.id === item.id);
+    // ─── Handlers ───────────────────────────────────────────────────────────
+
+    const addToOrder = (product: BackendProduct) => {
+        setSelectedItems((prev) => {
+            const existing = prev.find((i) => i.productId === product.id);
             if (existing) {
-                return prev.map(i =>
-                    i.id === item.id
-                        ? { ...i, quantity: i.quantity + 1 }
-                        : i
+                if (existing.quantity >= 20) return prev; // backend limit
+                return prev.map((i) =>
+                    i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i,
                 );
             }
-            return [...prev, { ...item, quantity: 1 }];
+            if (prev.length >= 20) return prev; // backend: ArrayMaxSize(20)
+            return [
+                ...prev,
+                {
+                    productId: product.id,
+                    title: product.title,
+                    price: toNumber(product.price),
+                    subtitle: product.subtitle ?? '',
+                    quantity: 1,
+                },
+            ];
         });
     };
 
-    // Удаление блюда из заказа
-    const removeFromOrder = (itemId: number) => {
-        setSelectedItems(prev => {
-            const existing = prev.find(i => i.id === itemId);
+    const removeFromOrder = (productId: string) => {
+        setSelectedItems((prev) => {
+            const existing = prev.find((i) => i.productId === productId);
             if (existing && existing.quantity > 1) {
-                return prev.map(i =>
-                    i.id === itemId
-                        ? { ...i, quantity: i.quantity - 1 }
-                        : i
+                return prev.map((i) =>
+                    i.productId === productId ? { ...i, quantity: i.quantity - 1 } : i,
                 );
             }
-            return prev.filter(i => i.id !== itemId);
+            return prev.filter((i) => i.productId !== productId);
         });
     };
 
-    // Общая сумма заказа
-    const totalPrice = selectedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const totalPrice = selectedItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
-    // Обработка отправки формы
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        // Здесь будет логика отправки на бэкенд
-        setShowSuccess(true);
-        setTimeout(() => {
-            setShowSuccess(false);
-            setStep(1);
-            setSelectedItems([]);
-            setFormData({
-                name: '',
-                phone: '',
-                date: '',
-                time: '',
-                guests: '2',
-                additionalRequests: '',
-            });
-        }, 3000);
+        setSubmitError(null);
+        createBookingMutation.mutate();
+    };
+
+    const resetAll = () => {
+        setShowSuccess(false);
+        setBookingNumber(null);
+        setStep(1);
+        setSelectedItems([]);
+        setFormData({
+            name: '',
+            phone: '',
+            date: '',
+            time: '',
+            guests: '2',
+            additionalRequests: '',
+        });
     };
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
-            {/* Hero Section */}
             <section className="relative h-[350px] overflow-hidden  pt-10">
                 <motion.div
                     className="absolute inset-0"
@@ -151,7 +264,7 @@ export const Reservations: React.FC = () => {
                     transition={{ duration: 1.5 }}
                 >
                     <img
-                        src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80"
+                        src={bannerImage}
                         alt="Reservations"
                         className="w-full h-full object-cover"
                     />
@@ -247,7 +360,7 @@ export const Reservations: React.FC = () => {
                                                             className="w-full px-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-accent-500 focus:border-transparent transition-all"
                                                         >
                                                             <option value="">Выберите время</option>
-                                                            {timeSlots.map(time => (
+                                                            {TIME_SLOTS.map(time => (
                                                                 <option key={time} value={time}>{time}</option>
                                                             ))}
                                                         </select>
@@ -260,7 +373,7 @@ export const Reservations: React.FC = () => {
                                                         <Users className="w-4 h-4 inline mr-2" />
                                                         Количество гостей
                                                     </label>
-                                                    <div className="flex items-center gap-4">
+                                                    <div className="flex items-center gap-4 flex-wrap">
                                                         {[2, 4, 6, 8, 10].map(num => (
                                                             <button
                                                                 key={num}
@@ -274,6 +387,14 @@ export const Reservations: React.FC = () => {
                                                                 {num}
                                                             </button>
                                                         ))}
+                                                        <input
+                                                            type="number"
+                                                            min={1}
+                                                            max={50}
+                                                            value={formData.guests}
+                                                            onChange={(e) => setFormData({...formData, guests: e.target.value})}
+                                                            className="w-20 px-3 py-2 rounded-lg border-2 border-gray-200 focus:border-accent-500 focus:outline-none"
+                                                        />
                                                     </div>
                                                 </div>
 
@@ -288,6 +409,7 @@ export const Reservations: React.FC = () => {
                                                         <input
                                                             type="text"
                                                             required
+                                                            maxLength={255}
                                                             value={formData.name}
                                                             onChange={(e) => setFormData({...formData, name: e.target.value})}
                                                             className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-accent-500 focus:border-transparent transition-all"
@@ -302,11 +424,25 @@ export const Reservations: React.FC = () => {
                                                         <input
                                                             type="tel"
                                                             required
+                                                            inputMode="tel"
+                                                            autoComplete="tel"
+                                                            maxLength={17} // «+996 XXX XXX-XXX» ровно 17 символов
                                                             value={formData.phone}
-                                                            onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                                                            onChange={(e) => setFormData({...formData, phone: formatKgPhone(e.target.value)})}
+                                                            onFocus={(e) => {
+                                                                // Если поле пустое — подставляем префикс, чтобы пользователь сразу набирал номер.
+                                                                if (!e.target.value) {
+                                                                    setFormData({...formData, phone: '+996 '});
+                                                                }
+                                                            }}
                                                             className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-accent-500 focus:border-transparent transition-all"
-                                                            placeholder="+996 703 530 377"
+                                                            placeholder="+996 XXX XXX-XXX"
                                                         />
+                                                        {formData.phone && !isKgPhoneComplete(formData.phone) && (
+                                                            <p className="mt-1 text-xs text-amber-600">
+                                                                Номер должен содержать 9 цифр после +996
+                                                            </p>
+                                                        )}
                                                     </div>
                                                 </div>
                                                 <div>
@@ -316,6 +452,7 @@ export const Reservations: React.FC = () => {
                                                     </label>
                                                     <textarea
                                                         rows={3}
+                                                        maxLength={1000}
                                                         value={formData.additionalRequests}
                                                         onChange={(e) => setFormData({...formData, additionalRequests: e.target.value})}
                                                         className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-accent-500 focus:border-transparent transition-all"
@@ -326,7 +463,7 @@ export const Reservations: React.FC = () => {
                                                 <button
                                                     type="button"
                                                     onClick={() => setStep(2)}
-                                                    disabled={!formData.name || !formData.phone || !formData.date || !formData.time}
+                                                    disabled={!formData.name || !isKgPhoneComplete(formData.phone) || !formData.date || !formData.time}
                                                     className="w-full bg-black text-white py-4 rounded-xl font-medium cursor-pointer hover:bg-accent-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                                 >
                                                     Далее
@@ -345,9 +482,11 @@ export const Reservations: React.FC = () => {
                                             className="bg-white rounded-2xl shadow-xl p-8"
                                         >
                                             <h2 className="text-2xl font-display font-bold">Выберите блюда</h2>
-                                            <p className="text-md italic font-semibold mb-6">Если хотите выбрать в заведении, можно пропустить этот пункт</p>
+                                            <p className="text-md italic font-semibold mb-6">
+                                                Если хотите выбрать в заведении, можно пропустить этот пункт
+                                            </p>
 
-                                            {/* Категории */}
+                                            {/* Категории — динамические из API */}
                                             <div className="flex flex-wrap gap-2 mb-6">
                                                 <button
                                                     type="button"
@@ -359,96 +498,65 @@ export const Reservations: React.FC = () => {
                                                 >
                                                     Все
                                                 </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setSelectedCategory('starters')}
-                                                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all
-                                                        ${selectedCategory === 'starters'
-                                                        ? 'bg-gray-500 text-white'
-                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
-                                                >
-                                                    Закуски
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setSelectedCategory('main')}
-                                                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all
-                                                        ${selectedCategory === 'main'
-                                                        ? 'bg-gray-500 text-white'
-                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
-                                                >
-                                                    Основные
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setSelectedCategory('desserts')}
-                                                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all
-                                                        ${selectedCategory === 'desserts'
-                                                        ? 'bg-gray-500 text-white'
-                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
-                                                >
-                                                    Десерты
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setSelectedCategory('wine')}
-                                                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all
-                                                        ${selectedCategory === 'wine'
-                                                        ? 'bg-gray-500 text-white'
-                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
-                                                >
-                                                    Вина
-                                                </button>
-                                            </div>
-
-                                            {/* Список блюд */}
-                                            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-                                                {filteredMenu.map(item => (
-                                                    <motion.div
-                                                        key={item.id}
-                                                        layout
-                                                        className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+                                                {categories.map((c) => (
+                                                    <button
+                                                        key={c.id}
+                                                        type="button"
+                                                        onClick={() => setSelectedCategory(c.slug)}
+                                                        className={`px-4 py-2 rounded-full text-sm font-medium transition-all
+                                                            ${selectedCategory === c.slug
+                                                            ? 'bg-gray-500 text-white'
+                                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
                                                     >
-                                                        <div className="flex-1">
-                                                            <h3 className="font-medium text-gray-900">{item.name}</h3>
-                                                            <p className="text-sm text-gray-500">{item.description}</p>
-                                                            <span className="text-accent-600 font-medium">{item.price} ₽</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-2">
-                                                            {selectedItems.find(i => i.id === item.id) && (
-                                                                <div className="flex items-center gap-2 mr-2">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => removeFromOrder(item.id)}
-                                                                        className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300 transition-colors"
-                                                                    >
-                                                                        <Minus className="w-3 h-3" />
-                                                                    </button>
-                                                                    <span className="w-6 text-center">
-                                                                        {selectedItems.find(i => i.id === item.id)?.quantity}
-                                                                    </span>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => addToOrder(item)}
-                                                                        className="w-6 h-6 rounded-full bg-gray-200  flex items-center justify-center hover:bg-gray-300 transition-colors"
-                                                                    >
-                                                                        <Plus className="w-3 h-3" />
-                                                                    </button>
-                                                                </div>
-                                                            )}
-                                                            {!selectedItems.find(i => i.id === item.id) && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => addToOrder(item)}
-                                                                    className="px-4 py-2 bg-gray-500 text-white rounded-lg text-sm hover:bg-accent-600 transition-colors"
-                                                                >
-                                                                    Добавить
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </motion.div>
+                                                        {c.title}
+                                                    </button>
                                                 ))}
                                             </div>
+
+                                            {/* Карточки меню — те же, что на /menu */}
+                                            <div className="max-h-[540px] overflow-y-auto pr-1 -mx-2 px-2">
+                                                {filteredMenu.length === 0 ? (
+                                                    <div className="text-center py-10 text-gray-400 text-sm">
+                                                        Нет доступных блюд
+                                                    </div>
+                                                ) : (
+                                                    <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                                                        {filteredMenu.map((item, index) => {
+                                                            const selected = selectedItems.find(
+                                                                (i) => i.productId === item.id,
+                                                            );
+                                                            const qty = selected?.quantity ?? 0;
+                                                            const atLimit = selectedItems.length >= 20 && qty === 0;
+                                                            return (
+                                                                <MenuCard
+                                                                    key={item.id}
+                                                                    product={item}
+                                                                    index={index}
+                                                                    quantity={qty}
+                                                                    compact
+                                                                    maxQuantity={atLimit ? 0 : 20}
+                                                                    addLabel="В предзаказ"
+                                                                    onQuantityChange={(product, delta) => {
+                                                                        if (delta > 0) addToOrder(product);
+                                                                        else removeFromOrder(product.id);
+                                                                    }}
+                                                                />
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {selectedItems.length > 0 && (
+                                                <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between text-sm">
+                                                    <span className="text-gray-600">
+                                                        Позиций: {selectedItems.length} / 20
+                                                    </span>
+                                                    <span className="font-semibold">
+                                                        Итого: {totalPrice.toLocaleString('ru-RU')} сом
+                                                    </span>
+                                                </div>
+                                            )}
 
                                             <div className="flex gap-3 mt-6">
                                                 <button
@@ -505,17 +613,22 @@ export const Reservations: React.FC = () => {
                                                     <div className="bg-gray-50 rounded-xl p-4">
                                                         <h3 className="font-medium text-gray-900 mb-3">Выбранные блюда</h3>
                                                         <div className="space-y-2">
-                                                            {selectedItems.map(item => (
-                                                                <div key={item.id} className="flex justify-between text-sm">
+                                                            {selectedItems.map((item) => (
+                                                                <div
+                                                                    key={item.productId}
+                                                                    className="flex justify-between text-sm"
+                                                                >
                                                                     <span className="text-gray-600">
-                                                                        {item.name} x{item.quantity}
+                                                                        {item.title} × {item.quantity}
                                                                     </span>
-                                                                    <span className="font-medium">{item.price * item.quantity} ₽</span>
+                                                                    <span className="font-medium">
+                                                                        {(item.price * item.quantity).toLocaleString('ru-RU')} сом
+                                                                    </span>
                                                                 </div>
                                                             ))}
                                                             <div className="pt-2 border-t border-gray-200 flex justify-between font-medium">
                                                                 <span>Итого:</span>
-                                                                <span>{totalPrice} ₽</span>
+                                                                <span>{totalPrice.toLocaleString('ru-RU')} сом</span>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -544,6 +657,36 @@ export const Reservations: React.FC = () => {
                                                     </div>
                                                 )}
 
+                                                {/* Оплата — payment-ready placeholder */}
+                                                <div className="bg-gray-50 rounded-xl p-4">
+                                                    <h3 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
+                                                        <CreditCard className="w-4 h-4 text-accent-500" />
+                                                        Оплата
+                                                    </h3>
+                                                    {selectedItems.length > 0 ? (
+                                                        <>
+                                                            <p className="text-sm text-gray-600">
+                                                                Оплата при посещении ресторана — наличными или картой.
+                                                            </p>
+                                                            <p className="text-xs text-gray-500 mt-2">
+                                                                В ближайшее время будет доступна онлайн-оплата и предоплата предзаказа.
+                                                            </p>
+                                                        </>
+                                                    ) : (
+                                                        <p className="text-sm text-gray-600">
+                                                            Для брони без предзаказа оплата не требуется.
+                                                        </p>
+                                                    )}
+                                                </div>
+
+                                                {/* Ошибка отправки */}
+                                                {submitError && (
+                                                    <div className="flex items-start gap-2 p-4 bg-red-50 border border-red-200 rounded-xl">
+                                                        <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                                                        <p className="text-sm text-red-700">{submitError}</p>
+                                                    </div>
+                                                )}
+
                                                 {/* Чекбокс согласия */}
                                                 <div className="flex items-start gap-2">
                                                     <input
@@ -561,17 +704,31 @@ export const Reservations: React.FC = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => setStep(2)}
-                                                        className="flex-1 px-3 sm:px-6 py-3 border border-gray-200 rounded-xl font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                                                        disabled={createBookingMutation.isPending}
+                                                        className="flex-1 px-3 sm:px-6 py-3 border border-gray-200 rounded-xl font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                                                     >
                                                         <ChevronLeft className="w-5 h-5" />
                                                         Назад
                                                     </button>
                                                     <button
                                                         type="submit"
-                                                        className="flex-1 px-3 bg-black text-white py-3 rounded-xl font-medium hover:bg-gray-600 transition-colors flex items-center justify-center gap-2"
+                                                        disabled={createBookingMutation.isPending}
+                                                        className="flex-1 px-3 bg-black text-white py-3 rounded-xl font-medium hover:bg-gray-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
                                                     >
-                                                        Забронировать
-                                                        <Send className="w-5 h-5" />
+                                                        {createBookingMutation.isPending ? (
+                                                            <>
+                                                                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                                                </svg>
+                                                                Отправка…
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                Забронировать
+                                                                <Send className="w-5 h-5" />
+                                                            </>
+                                                        )}
                                                     </button>
                                                 </div>
                                             </div>
@@ -586,35 +743,41 @@ export const Reservations: React.FC = () => {
                                 <h3 className="text-lg font-display font-bold mb-4">Информация</h3>
 
                                 <div className="space-y-4">
-                                    <div className="flex items-start gap-3">
-                                        <div className="p-2 bg-accent-100 rounded-lg">
-                                            <Clock className="w-5 h-5 text-accent-600" />
+                                    {workingHours && (
+                                        <div className="flex items-start gap-3">
+                                            <div className="p-2 bg-accent-100 rounded-lg">
+                                                <Clock className="w-5 h-5 text-accent-600" />
+                                            </div>
+                                            <div>
+                                                <p className="font-medium">Часы работы</p>
+                                                <p className="text-sm text-gray-500">{workingHours}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="font-medium">Часы работы</p>
-                                            <p className="text-sm text-gray-500">Ежедневно: 12:00 - 00:00</p>
-                                        </div>
-                                    </div>
+                                    )}
 
-                                    <div className="flex items-start gap-3">
-                                        <div className="p-2 bg-accent-100 rounded-lg">
-                                            <MapPin className="w-5 h-5 text-accent-600" />
+                                    {address && (
+                                        <div className="flex items-start gap-3">
+                                            <div className="p-2 bg-accent-100 rounded-lg">
+                                                <MapPin className="w-5 h-5 text-accent-600" />
+                                            </div>
+                                            <div>
+                                                <p className="font-medium">Адрес</p>
+                                                <p className="text-sm text-gray-500">{address}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="font-medium">Адрес</p>
-                                            <p className="text-sm text-gray-500">ул. Ресторанная, 1</p>
-                                        </div>
-                                    </div>
+                                    )}
 
-                                    <div className="flex items-start gap-3">
-                                        <div className="p-2 bg-accent-100 rounded-lg">
-                                            <Phone className="w-5 h-5 text-accent-600" />
+                                    {phone && (
+                                        <div className="flex items-start gap-3">
+                                            <div className="p-2 bg-accent-100 rounded-lg">
+                                                <Phone className="w-5 h-5 text-accent-600" />
+                                            </div>
+                                            <div>
+                                                <p className="font-medium">Телефон</p>
+                                                <p className="text-sm text-gray-500">{phone}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="font-medium">Телефон</p>
-                                            <p className="text-sm text-gray-500">+996 703 530 377</p>
-                                        </div>
-                                    </div>
+                                    )}
 
                                     <div className="border-t border-gray-200 my-4" />
 
@@ -657,14 +820,28 @@ export const Reservations: React.FC = () => {
                                 <Check className="w-8 h-8 text-green-500" />
                             </div>
                             <h3 className="text-2xl font-display font-bold mb-2">Спасибо за бронь!</h3>
+                            {bookingNumber && (
+                                <p className="text-sm text-gray-500 mb-2">
+                                    Номер брони: <span className="font-mono font-semibold text-gray-800">{bookingNumber}</span>
+                                </p>
+                            )}
                             <p className="text-gray-600 mb-6">
-                                C вами свяжется администратор
+                                С вами свяжется администратор
                             </p>
-                            <Link to="/">
-                                <button className="w-full bg-black text-white py-3 rounded-xl font-medium hover:bg-gray-600 transition-colors">
-                                    На главную
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={resetAll}
+                                    className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+                                >
+                                    Новая бронь
                                 </button>
-                            </Link>
+                                <Link to="/" className="flex-1">
+                                    <button className="w-full bg-black text-white py-3 rounded-xl font-medium hover:bg-gray-600 transition-colors">
+                                        На главную
+                                    </button>
+                                </Link>
+                            </div>
                         </motion.div>
                     </motion.div>
                 )}

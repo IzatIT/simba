@@ -1,4 +1,4 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import { Link } from 'react-router-dom';
 import {motion, useScroll, useTransform, useSpring, AnimatePresence,} from 'framer-motion';
 import {
@@ -16,8 +16,115 @@ import {
     Heart,
     ArrowRight,
 } from 'lucide-react';
+import { usePublicConfig } from '../../entities/public-config/api.ts';
+
+// Градиенты для stat-карточек (назначаются циклически, т.к. в БД цветов нет).
+const STAT_GRADIENTS = [
+    'from-amber-400 to-yellow-500',
+    'from-emerald-400 to-teal-500',
+    'from-blue-400 to-indigo-500',
+    'from-purple-400 to-pink-500',
+];
+
+// Иконки для stat-карточек — тоже по индексу.
+const STAT_ICONS = [
+    <Star className="w-8 h-8" />,
+    <Utensils className="w-8 h-8" />,
+    <Users className="w-8 h-8" />,
+    <Award className="w-8 h-8" />,
+];
+
+// Иконки для event-карточек — назначаются циклически, т.к. в БД их нет.
+const EVENT_ICONS = [
+    <Heart className="w-6 h-6" />,
+    <Coffee className="w-6 h-6" />,
+    <Wine className="w-6 h-6" />,
+];
+
+// UI-chrome: заголовки секций + креативные тексты. В backend-схеме для них нет полей
+// (SiteConfiguration/footer жёстко ограничены DTO), поэтому держим как константы на
+// фронте — легко перенести в БД, если позже добавить соответствующие поля.
+const UI_TEXT = {
+    hero: {
+        badge: '✦ Добро пожаловать Конокбекова Сымбат ✦',
+        title1: 'Искусство',
+        title2: 'вкуса',
+        subtitle:
+            'Искусство вкуса — простить глупости, ведь тебя любит не за идеальность, а за то, что без тебя всё теряет вкус.',
+        ctaReserve: 'Забронировать столик',
+        ctaMenu: 'Посмотреть меню',
+    },
+    stats: {
+        eyebrow: 'Наши достижения',
+        title: 'Цифры, говорящие сами за себя',
+        subtitle:
+            'Мы гордимся каждым гостем и каждой наградой, которые стали частью нашей истории',
+        footer: 'и это только начало нашей истории успеха ✦',
+    },
+    gallery: {
+        titlePrefix: 'Атмосфера',
+        titleAccent: 'ресторана',
+        subtitle: 'Погрузитесь в уникальную атмосферу нашего заведения',
+    },
+    events: {
+        titlePrefix: 'Специальные',
+        titleAccent: 'события',
+        subtitle: 'Мы создаем незабываемые моменты для особых случаев',
+    },
+    cta: {
+        title1: 'Готовы попробовать',
+        title2: 'нашу кухню?',
+        subtitle:
+            'Забронируйте столик прямо сейчас и насладитесь изысканной кухней в атмосфере уюта и гостеприимства',
+        ctaReserve: 'Забронировать столик',
+        ctaContact: 'Связаться с нами',
+    },
+} as const;
+
+// Собираем строку часов из worktimeItems: "Ежедневно HH:MM - HH:MM", если все одинаковые.
+function formatWorkingHours(
+    items?: { openTime: string | null; closeTime: string | null; isClosed: boolean }[],
+    is24Hours?: boolean,
+): string {
+    if (is24Hours) return 'Круглосуточно';
+    const open = (items ?? []).filter((i) => !i.isClosed && i.openTime && i.closeTime);
+    if (!open.length) return '';
+    const allSame =
+        open.length === 7 &&
+        open.every((i) => i.openTime === open[0].openTime && i.closeTime === open[0].closeTime);
+    return allSame ? `Ежедневно ${open[0].openTime} - ${open[0].closeTime}` : '';
+}
 
 export const Home: React.FC = () => {
+    const { data: config } = usePublicConfig();
+
+    const stats = useMemo(
+        () =>
+            (config?.statisticItems ?? []).map((s, i) => ({
+                icon: STAT_ICONS[i % STAT_ICONS.length],
+                value: s.value,
+                label: s.title,
+                description: s.subtitle ?? '',
+                gradient: STAT_GRADIENTS[i % STAT_GRADIENTS.length],
+            })),
+        [config?.statisticItems],
+    );
+    const philosophyBlock = config?.philosophyBlock ?? null;
+    const personBlock = config?.personBlock ?? null;
+    const events = config?.eventItems ?? [];
+    const galleryItems = config?.galleryItems ?? [];
+    const phone = config?.phoneNumbers?.[0] ?? '';
+    const address = config?.addresses?.[0] ?? '';
+    const workingHours = formatWorkingHours(config?.worktimeItems, config?.is24Hours);
+
+    // Hero-слайды берём из SiteConfigMedia slot=WELCOME_IMAGE.
+    const heroImages = useMemo(() => {
+        const items = (config?.siteConfigMedia ?? [])
+            .filter((m) => m.slot === 'WELCOME_IMAGE' && m.media?.url)
+            .sort((a, b) => a.order - b.order)
+            .map((m) => ({ url: m.media.url, alt: m.media.alt ?? '' }));
+        return items;
+    }, [config?.siteConfigMedia]);
     const heroRef = useRef<HTMLDivElement>(null);
     const { scrollYProgress } = useScroll({
         target: heroRef,
@@ -31,43 +138,28 @@ export const Home: React.FC = () => {
     const springConfig = { stiffness: 300, damping: 30, restDelta: 0.001 };
     const smoothY = useSpring(parallaxY, springConfig);
 
-    const heroImages = [
-        {
-            url: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80',
-            alt: 'Элегантный зал ресторана'
-        },
-        {
-            url: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80',
-            alt: 'Интерьер ресторана'
-        },
-        {
-            url: 'https://images.unsplash.com/photo-1559339352-11d035aa65de?ixlib=rb-4.0.3&auto=format&fit=crop&w=2074&q=80',
-            alt: 'Атмосфера вечера'
-        },
-        {
-            url: 'https://images.unsplash.com/photo-1600891964599-f61ba0e24092?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80',
-            alt: 'Приготовление блюд'
-        },
-        {
-            url: 'https://images.unsplash.com/photo-1592861956120-e524fc739696?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80',
-            alt: 'Винная коллекция'
-        }
-    ];
-
     useEffect(() => {
+        if (heroImages.length < 2) return;
         const interval = setInterval(() => {
             setCurrentImageIndex((prev) => (prev + 1) % heroImages.length);
-        }, 5000); // Меняем каждые 5 секунд
-
+        }, 5000);
         return () => clearInterval(interval);
     }, [heroImages.length]);
 
-    // Ручное переключение изображений
+    // Если данные догрузились и индекс вышел за пределы — откатываем к 0.
+    useEffect(() => {
+        if (heroImages.length > 0 && currentImageIndex >= heroImages.length) {
+            setCurrentImageIndex(0);
+        }
+    }, [heroImages.length, currentImageIndex]);
+
     const nextImage = () => {
+        if (heroImages.length === 0) return;
         setCurrentImageIndex((prev) => (prev + 1) % heroImages.length);
     };
 
     const prevImage = () => {
+        if (heroImages.length === 0) return;
         setCurrentImageIndex((prev) => (prev - 1 + heroImages.length) % heroImages.length);
     };
     return (
@@ -87,18 +179,20 @@ export const Home: React.FC = () => {
                 >
                     <div className="absolute inset-0 bg-black/50 z-10" />
 
-                    <AnimatePresence mode="wait">
-                        <motion.img
-                            key={currentImageIndex}
-                            src={heroImages[currentImageIndex].url}
-                            alt={heroImages[currentImageIndex].alt}
-                            className="w-full h-full object-cover"
-                            initial={{ opacity: 0.1, scale: 1 }}
-                            animate={{ opacity: 1, scale: 1.2 }}
-                            exit={{ opacity: 0.1, scale: 1.5 }}
-                            transition={{ duration: 1, ease: "easeInOut" }}
-                        />
-                    </AnimatePresence>
+                    {heroImages.length > 0 && (
+                        <AnimatePresence mode="wait">
+                            <motion.img
+                                key={currentImageIndex}
+                                src={heroImages[currentImageIndex].url}
+                                alt={heroImages[currentImageIndex].alt}
+                                className="w-full h-full object-cover"
+                                initial={{ opacity: 0.1, scale: 1 }}
+                                animate={{ opacity: 1, scale: 1.2 }}
+                                exit={{ opacity: 0.1, scale: 1.5 }}
+                                transition={{ duration: 1, ease: 'easeInOut' }}
+                            />
+                        </AnimatePresence>
+                    )}
 
                     {/* Градиент для лучшей читаемости текста */}
                     <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-transparent z-10" />
@@ -152,7 +246,7 @@ export const Home: React.FC = () => {
                         className="inline-block mb-6"
                     >
                         <span className="px-4 py-2 bg-white/20 backdrop-blur-md rounded-full text-sm tracking-wider">
-                            ✦ Добро пожаловать Конокбекова Сымбат ✦
+                            {UI_TEXT.hero.badge}
                         </span>
                     </motion.div>
 
@@ -162,8 +256,8 @@ export const Home: React.FC = () => {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.7 }}
                     >
-                        Искусство
-                        <span className="block text-accent-400">вкуса</span>
+                        {UI_TEXT.hero.title1}
+                        <span className="block text-accent-400">{UI_TEXT.hero.title2}</span>
                     </motion.h1>
 
                     <motion.p
@@ -172,9 +266,7 @@ export const Home: React.FC = () => {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.9 }}
                     >
-                        Искусство вкуса — простить глупости,
-                        ведь тебя любит не за идеальность,
-                        а за то, что без тебя всё теряет вкус.
+                        {UI_TEXT.hero.subtitle}
                     </motion.p>
 
                     <motion.div
@@ -191,7 +283,7 @@ export const Home: React.FC = () => {
                             >
                                 <span className="relative z-10 flex items-center">
                                     <Calendar className="w-5 h-5 mr-2" />
-                                    Забронировать столик
+                                    {UI_TEXT.hero.ctaReserve}
                                     <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
                                 </span>
                                 <motion.div
@@ -211,7 +303,7 @@ export const Home: React.FC = () => {
                             >
                                 <span className="flex items-center">
                                     <Utensils className="w-5 h-5 mr-2" />
-                                    Посмотреть меню
+                                    {UI_TEXT.hero.ctaMenu}
                                 </span>
                             </motion.button>
                         </Link>
@@ -278,12 +370,12 @@ export const Home: React.FC = () => {
                         viewport={{ once: true }}
                         className="text-center mb-12"
                     >
-                        <span className="text-sm font-semibold text-primary-600 uppercase tracking-wider">Наши достижения</span>
+                        <span className="text-sm font-semibold text-primary-600 uppercase tracking-wider">{UI_TEXT.stats.eyebrow}</span>
                         <h2 className="text-3xl md:text-4xl font-display font-bold text-gray-900 mt-2">
-                            Цифры, говорящие сами за себя
+                            {UI_TEXT.stats.title}
                         </h2>
                         <p className="text-gray-600 mt-3 max-w-2xl mx-auto">
-                            Мы гордимся каждым гостем и каждой наградой, которые стали частью нашей истории
+                            {UI_TEXT.stats.subtitle}
                         </p>
                     </motion.div>
 
@@ -295,36 +387,7 @@ export const Home: React.FC = () => {
                         transition={{ duration: 0.8 }}
                         viewport={{ once: true }}
                     >
-                        {[
-                            {
-                                icon: <Star className="w-8 h-8" />,
-                                value: '15+',
-                                label: 'лет опыта',
-                                description: 'безупречной работы',
-                                gradient: 'from-amber-400 to-yellow-500'
-                            },
-                            {
-                                icon: <Utensils className="w-8 h-8" />,
-                                value: '150+',
-                                label: 'блюд в меню',
-                                description: 'на любой вкус',
-                                gradient: 'from-emerald-400 to-teal-500'
-                            },
-                            {
-                                icon: <Users className="w-8 h-8" />,
-                                value: '5000+',
-                                label: 'гостей в месяц',
-                                description: 'и это не предел',
-                                gradient: 'from-blue-400 to-indigo-500'
-                            },
-                            {
-                                icon: <Award className="w-8 h-8" />,
-                                value: '25+',
-                                label: 'наград',
-                                description: 'и престижных премий',
-                                gradient: 'from-purple-400 to-pink-500'
-                            },
-                        ].map((stat, index) => (
+                        {stats.map((stat, index) => (
                             <motion.div
                                 key={index}
                                 initial={{ opacity: 0, y: 30 }}
@@ -396,7 +459,6 @@ export const Home: React.FC = () => {
                                     />
                                 </div>
 
-                                {/* Тень при наведении */}
                                 <motion.div
                                     className={`absolute -inset-2 bg-gradient-to-r ${stat.gradient} rounded-3xl opacity-0 group-hover:opacity-20 blur-xl -z-10`}
                                     initial={false}
@@ -406,7 +468,6 @@ export const Home: React.FC = () => {
                         ))}
                     </motion.div>
 
-                    {/* Дополнительная информация (опционально) */}
                     <motion.div
                         initial={{ opacity: 0 }}
                         whileInView={{ opacity: 1 }}
@@ -414,17 +475,22 @@ export const Home: React.FC = () => {
                         viewport={{ once: true }}
                         className="text-center mt-12 text-gray-500 text-sm"
                     >
-                        <p>и это только начало нашей истории успеха ✦</p>
+                        <p>{UI_TEXT.stats.footer}</p>
                     </motion.div>
                 </div>
             </section>
 
-            {/* About Section с параллаксом */}
+
             <section className="relative  py-20 overflow-hidden">
                 <motion.div
                     className="absolute inset-0"
                     style={{
-                        backgroundImage: 'url(https://images.unsplash.com/photo-1600891964599-f61ba0e24092?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80)',
+                        backgroundImage: `url(${
+                            philosophyBlock?.img?.url ??
+                            heroImages[3]?.url ??
+                            heroImages[0]?.url ??
+                            ''
+                        })`,
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
                     }}
@@ -442,104 +508,109 @@ export const Home: React.FC = () => {
                             viewport={{ once: true }}
                         >
                             <h2 className="text-3xl sm:text-5xl font-display font-bold mb-6">
-                                Наша <span className="text-accent-400">философия</span>
+                                {philosophyBlock?.title ?? ""}
                             </h2>
-                            <p className="text-xl mb-8 text-gray-200">
-                                Мы создаем не просто еду, мы создаем впечатления.
-                                Каждое блюдо — это история, рассказанная шеф-поваром
-                                с любовью к французской кулинарной традиции.
-                            </p>
-                            <div className="grid grid-cols-2 gap-6">
-                                <div>
-                                    <div className="text-4xl font-bold text-accent-400 mb-2">20+</div>
-                                    <div className="text-sm text-gray-300">лет безупречного сервиса</div>
+                            {philosophyBlock?.subtitle && (
+                                <p className="text-xl mb-8 text-gray-200">
+                                    {philosophyBlock.subtitle}
+                                </p>
+                            )}
+                            {(philosophyBlock?.items?.length ?? 0) > 0 && (
+                                <div className="grid grid-cols-2 gap-6">
+                                    {philosophyBlock!.items.slice(0, 2).map((item) => (
+                                        <div key={item.id}>
+                                            <div className="text-4xl font-bold text-accent-400 mb-2">
+                                                {item.title}
+                                            </div>
+                                            {item.subtitle && (
+                                                <div className="text-sm text-gray-300">
+                                                    {item.subtitle}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
                                 </div>
-                                <div>
-                                    <div className="text-4xl font-bold text-accent-400 mb-2">100%</div>
-                                    <div className="text-sm text-gray-300">свежие продукты</div>
-                                </div>
-                            </div>
+                            )}
                         </motion.div>
                     </div>
                 </div>
             </section>
 
             {/* Галерея с параллаксом */}
-            <section id="atmosphere" className="py-20 bg-gray-50">
-                <div className="container mx-auto px-4">
-                    <motion.div
-                        className="text-center max-w-3xl mx-auto mb-16"
-                        initial={{ opacity: 0, y: 30 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.6 }}
-                        viewport={{ once: true }}
-                    >
-                        <h2 className="text-3xl sm:text-5xl font-display font-bold text-gray-900 mb-4">
-                            Атмосфера <span className="text-primary-600">ресторана</span>
-                        </h2>
-                        <p className="text-xl text-gray-600">
-                            Погрузитесь в уникальную атмосферу нашего заведения
-                        </p>
-                    </motion.div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {galleryItems.length > 0 && (
+                <section id="atmosphere" className="py-20 bg-gray-50">
+                    <div className="container mx-auto px-4">
                         <motion.div
-                            className="relative h-full rounded-2xl overflow-hidden group"
-                            whileHover={{ scale: 1.02 }}
-                            transition={{ duration: 0.3 }}
+                            className="text-center max-w-3xl mx-auto mb-16"
+                            initial={{ opacity: 0, y: 30 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.6 }}
+                            viewport={{ once: true }}
                         >
-                            <img
-                                src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80"
-                                alt="Restaurant interior"
-                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                            <div className="absolute bottom-0 left-0 right-0 p-6 text-white transform translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-                                <h3 className="text-2xl font-bold mb-2">Основной зал</h3>
-                                <p className="text-gray-200">Элегантный интерьер в классическом стиле</p>
-                            </div>
+                            <h2 className="text-3xl sm:text-5xl font-display font-bold text-gray-900 mb-4">
+                                {UI_TEXT.gallery.titlePrefix}{' '}
+                                <span className="text-primary-600">{UI_TEXT.gallery.titleAccent}</span>
+                            </h2>
+                            <p className="text-xl text-gray-600">{UI_TEXT.gallery.subtitle}</p>
                         </motion.div>
 
-                        <div className="grid grid-rows-2 gap-4 h-full">
-                            <motion.div
-                                className="relative rounded-2xl overflow-hidden group"
-                                whileHover={{ scale: 1.02 }}
-                                transition={{ duration: 0.3 }}
-                            >
-                                <img
-                                    src="https://images.unsplash.com/photo-1592861956120-e524fc739696?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80"
-                                    alt="Wine cellar"
-                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                                />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                                <div className="absolute bottom-0 left-0 right-0 p-6 text-white transform translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-                                    <h3 className="text-2xl font-bold mb-2">Винный погреб</h3>
-                                    <p className="text-gray-200">Коллекция из 500+ вин со всего мира</p>
-                                </div>
-                            </motion.div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Большая карточка — первый элемент */}
+                            {galleryItems[0] && (
+                                <motion.div
+                                    className="relative h-full rounded-2xl overflow-hidden group min-h-[400px]"
+                                    whileHover={{ scale: 1.02 }}
+                                    transition={{ duration: 0.3 }}
+                                >
+                                    <img
+                                        src={galleryItems[0].media?.url}
+                                        alt={galleryItems[0].title ?? ''}
+                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                                    <div className="absolute bottom-0 left-0 right-0 p-6 text-white transform translate-y-full group-hover:translate-y-0 transition-transform duration-300">
+                                        {galleryItems[0].title && (
+                                            <h3 className="text-2xl font-bold mb-2">{galleryItems[0].title}</h3>
+                                        )}
+                                        {galleryItems[0].subtitle && (
+                                            <p className="text-gray-200">{galleryItems[0].subtitle}</p>
+                                        )}
+                                    </div>
+                                </motion.div>
+                            )}
 
-                            <motion.div
-                                className="relative rounded-2xl overflow-hidden group"
-                                whileHover={{ scale: 1.02 }}
-                                transition={{ duration: 0.3 }}
-                            >
-                                <img
-                                    src="https://images.unsplash.com/photo-1559339352-11d035aa65de?ixlib=rb-4.0.3&auto=format&fit=crop&w=2074&q=80"
-                                    alt="Open kitchen"
-                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                                />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                                <div className="absolute bottom-0 left-0 right-0 p-6 text-white transform translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-                                    <h3 className="text-2xl font-bold mb-2">Открытая кухня</h3>
-                                    <p className="text-gray-200">Наблюдайте за процессом приготовления</p>
+                            {galleryItems.length > 1 && (
+                                <div className="grid grid-rows-2 gap-4 h-full">
+                                    {galleryItems.slice(1, 3).map((g) => (
+                                        <motion.div
+                                            key={g.id}
+                                            className="relative rounded-2xl overflow-hidden group"
+                                            whileHover={{ scale: 1.02 }}
+                                            transition={{ duration: 0.3 }}
+                                        >
+                                            <img
+                                                src={g.media?.url}
+                                                alt={g.title ?? ''}
+                                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                                            />
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                                            <div className="absolute bottom-0 left-0 right-0 p-6 text-white transform translate-y-full group-hover:translate-y-0 transition-transform duration-300">
+                                                {g.title && (
+                                                    <h3 className="text-2xl font-bold mb-2">{g.title}</h3>
+                                                )}
+                                                {g.subtitle && (
+                                                    <p className="text-gray-200">{g.subtitle}</p>
+                                                )}
+                                            </div>
+                                        </motion.div>
+                                    ))}
                                 </div>
-                            </motion.div>
+                            )}
                         </div>
                     </div>
-                </div>
-            </section>
+                </section>
+            )}
 
-            {/* Chef Section */}
             <section className="py-20 bg-white relative overflow-hidden">
                 <div className="absolute inset-0 opacity-5">
                     <div className="absolute top-0 left-0 w-64 h-64 bg-primary-600 rounded-full filter blur-3xl" />
@@ -555,19 +626,17 @@ export const Home: React.FC = () => {
                             viewport={{ once: true }}
                         >
                             <h2 className="text-3xl sm:text-5xl font-display font-bold text-gray-900 mb-6">
-                                Шеф-повар
-                                <span className="block text-primary-600">Дастан Жээнбеков</span>
+                                <span className="block text-primary-600">
+                                    {personBlock?.title ?? ''}
+                                </span>
                             </h2>
-                            <p className="text-xl text-gray-600 mb-8">
-                                Более 25 лет опыта работы в лучших ресторанах Франции.
-                            </p>
+                            {personBlock?.subtitle && (
+                                <p className="text-xl text-gray-600 mb-8">
+                                    {personBlock.subtitle}
+                                </p>
+                            )}
                             <div className="space-y-4 mb-8">
-                                {[
-                                    'Член Французской кулинарной академии',
-                                    'Победитель конкурса "Шеф года" 2026',
-                                    'Автор книги "Секреты французской кухни"',
-                                    'Опыт работы в лучших ресторанах Бишкека'
-                                ].map((item, index) => (
+                                {(personBlock?.awards ?? []).map((item, index) => (
                                     <motion.div
                                         key={index}
                                         className="flex items-center gap-3"
@@ -593,21 +662,11 @@ export const Home: React.FC = () => {
                             viewport={{ once: true }}
                         >
                             <div className="relative z-10">
-                                <img
-                                    src="/chief.png"
-                                    alt="Chef"
+                                {personBlock?.img?.url && <img
+                                    src={personBlock?.img?.url}
+                                    alt={personBlock?.title ?? 'Chef'}
                                     className="rounded-2xl shadow-2xl"
-                                />
-                                <motion.div
-                                    className="absolute -bottom-6 -right-6 w-32 h-32 bg-accent-500 rounded-full flex items-center justify-center text-white font-bold shadow-xl"
-                                    animate={{ rotate: 360 }}
-                                    transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
-                                >
-                                    <div className="text-center">
-                                        <div className="text-3xl">25+</div>
-                                        <div className="text-xs">лет опыта</div>
-                                    </div>
-                                </motion.div>
+                                />}
                             </div>
                             <div className="absolute -top-6 -left-6 w-48 h-48 bg-primary-100 rounded-full -z-10" />
                         </motion.div>
@@ -633,36 +692,16 @@ export const Home: React.FC = () => {
                         viewport={{ once: true }}
                     >
                         <h2 className="text-3xl sm:text-5xl font-display font-bold text-gray-900 mb-4">
-                            Специальные <span className="text-primary-600">события</span>
+                            {UI_TEXT.events.titlePrefix}{' '}
+                            <span className="text-primary-600">{UI_TEXT.events.titleAccent}</span>
                         </h2>
-                        <p className="text-xl text-gray-600">
-                            Мы создаем незабываемые моменты для особых случаев
-                        </p>
+                        <p className="text-xl text-gray-600">{UI_TEXT.events.subtitle}</p>
                     </motion.div>
 
                     <div className="grid md:grid-cols-3 gap-8">
-                        {[
-                            {
-                                title: 'Романтический ужин',
-                                description: 'Особая атмосфера для двоих, свечи, живая музыка и изысканное меню',
-                                image: 'https://images.unsplash.com/photo-1559339352-11d035aa65de?ixlib=rb-4.0.3&auto=format&fit=crop&w=2074&q=80',
-                                icon: <Heart className="w-6 h-6" />
-                            },
-                            {
-                                title: 'Бизнес-ланч',
-                                description: 'Деловая встреча в комфортной обстановке с быстрой подачей блюд',
-                                image: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80',
-                                icon: <Coffee className="w-6 h-6" />
-                            },
-                            {
-                                title: 'Винная дегустация',
-                                description: 'Эксклюзивные сорта вин в сопровождении сырной тарелки',
-                                image: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80',
-                                icon: <Wine className="w-6 h-6" />
-                            }
-                        ].map((event, index) => (
+                        {events.map((event, index) => (
                             <motion.div
-                                key={index}
+                                key={event.id}
                                 className="group relative h-[400px] rounded-2xl overflow-hidden cursor-pointer"
                                 initial={{ opacity: 0, y: 30 }}
                                 whileInView={{ opacity: 1, y: 0 }}
@@ -670,28 +709,25 @@ export const Home: React.FC = () => {
                                 whileHover={{ y: -10 }}
                                 viewport={{ once: true }}
                             >
-                                <img
-                                    src={event.image}
-                                    alt={event.title}
-                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                                />
+                                {event.media?.url && (
+                                    <img
+                                        src={event.media.url}
+                                        alt={event.title}
+                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                                    />
+                                )}
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
 
                                 <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
                                     <div className="flex items-center gap-2 mb-2">
                                         <div className="p-2 bg-accent-500 rounded-full">
-                                            {event.icon}
+                                            {EVENT_ICONS[index % EVENT_ICONS.length]}
                                         </div>
                                         <h3 className="text-2xl font-bold">{event.title}</h3>
                                     </div>
-                                    <p className="text-gray-200 mb-4">{event.description}</p>
-                                    <motion.button
-                                        whileHover={{ x: 5 }}
-                                        className="flex items-center text-accent-400 font-medium"
-                                    >
-                                        Подробнее
-                                        <ChevronRight className="w-4 h-4 ml-1" />
-                                    </motion.button>
+                                    {event.subtitle && (
+                                        <p className="text-gray-200 mb-4">{event.subtitle}</p>
+                                    )}
                                 </div>
 
                                 {/* Hover overlay effect */}
@@ -707,7 +743,7 @@ export const Home: React.FC = () => {
                 <motion.div
                     className="absolute inset-0 z-0 top-0 left-0 w-full h-full"
                     style={{
-                        backgroundImage: 'url(https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80)',
+                        backgroundImage: `url(${heroImages[1]?.url ?? heroImages[0]?.url ?? ''})`,
                         backgroundSize: 'cover',
                     }}
                 >
@@ -736,8 +772,7 @@ export const Home: React.FC = () => {
                             viewport={{ once: true }}
                             className="text-3xl sm:text-5xl md:text-7xl font-display font-bold mb-6 leading-tight"
                         >
-                            Готовы попробовать
-                            <span className="block text-accent-400 mt-2">нашу кухню?</span>
+                            <span className="block text-accent-400 mt-2">{config?.footer?.title || ""}</span>
                         </motion.h2>
 
                         {/* Описание */}
@@ -748,7 +783,7 @@ export const Home: React.FC = () => {
                             viewport={{ once: true }}
                             className="text-xl md:text-2xl mb-10 text-gray-200 max-w-2xl mx-auto"
                         >
-                            Забронируйте столик прямо сейчас и насладитесь изысканной кухней в атмосфере уюта и гостеприимства
+                            {config?.footer?.subtitle || ""}
                         </motion.p>
 
                         {/* Кнопки */}
@@ -765,7 +800,7 @@ export const Home: React.FC = () => {
                                     whileTap={{ scale: 0.95 }}
                                     className="group relative px-10 py-4 bg-accent-500 text-white rounded-full font-medium text-lg shadow-xl overflow-hidden cursor-pointer"
                                 >
-                                    <span className="relative z-10">Забронировать столик</span>
+                                    <span className="relative z-10">{UI_TEXT.cta.ctaReserve}</span>
                                     <motion.div
                                         className="absolute inset-0 bg-gradient-to-r from-accent-600 to-accent-400"
                                         initial={{ x: "100%" }}
@@ -781,7 +816,7 @@ export const Home: React.FC = () => {
                                     whileTap={{ scale: 0.95 }}
                                     className="group relative px-10 py-4 border-2 border-white text-white rounded-full font-medium text-lg overflow-hidden cursor-pointer"
                                 >
-                                    <span className="relative z-10">Связаться с нами</span>
+                                    <span className="relative z-10">{UI_TEXT.cta.ctaContact}</span>
                                     <motion.div
                                         className="absolute inset-0 bg-white"
                                         initial={{ y: "100%" }}
@@ -801,35 +836,41 @@ export const Home: React.FC = () => {
                             viewport={{ once: true }}
                             className="flex flex-wrap justify-center gap-8 pt-10 border-t border-white/20"
                         >
-                            <motion.div
-                                whileHover={{ scale: 1.05, x: 5 }}
-                                className="flex items-center gap-3 group cursor-default"
-                            >
-                                <div className="p-2 bg-accent-500/20 rounded-full group-hover:bg-accent-500/30 transition-colors">
-                                    <Phone className="w-5 h-5 text-accent-400" />
-                                </div>
-                                <span className="text-gray-200">+996 703 530 377</span>
-                            </motion.div>
+                            {phone && (
+                                <motion.div
+                                    whileHover={{ scale: 1.05, x: 5 }}
+                                    className="flex items-center gap-3 group cursor-default"
+                                >
+                                    <div className="p-2 bg-accent-500/20 rounded-full group-hover:bg-accent-500/30 transition-colors">
+                                        <Phone className="w-5 h-5 text-accent-400" />
+                                    </div>
+                                    <span className="text-gray-200">{phone}</span>
+                                </motion.div>
+                            )}
 
-                            <motion.div
-                                whileHover={{ scale: 1.05, x: 5 }}
-                                className="flex items-center gap-3 group cursor-default"
-                            >
-                                <div className="p-2 bg-accent-500/20 rounded-full group-hover:bg-accent-500/30 transition-colors">
-                                    <MapPin className="w-5 h-5 text-accent-400" />
-                                </div>
-                                <span className="text-gray-200">ул. Ресторанная, 1</span>
-                            </motion.div>
+                            {address && (
+                                <motion.div
+                                    whileHover={{ scale: 1.05, x: 5 }}
+                                    className="flex items-center gap-3 group cursor-default"
+                                >
+                                    <div className="p-2 bg-accent-500/20 rounded-full group-hover:bg-accent-500/30 transition-colors">
+                                        <MapPin className="w-5 h-5 text-accent-400" />
+                                    </div>
+                                    <span className="text-gray-200">{address}</span>
+                                </motion.div>
+                            )}
 
-                            <motion.div
-                                whileHover={{ scale: 1.05, x: 5 }}
-                                className="flex items-center gap-3 group cursor-default"
-                            >
-                                <div className="p-2 bg-accent-500/20 rounded-full group-hover:bg-accent-500/30 transition-colors">
-                                    <Clock className="w-5 h-5 text-accent-400" />
-                                </div>
-                                <span className="text-gray-200">Ежедневно 12:00 - 00:00</span>
-                            </motion.div>
+                            {workingHours && (
+                                <motion.div
+                                    whileHover={{ scale: 1.05, x: 5 }}
+                                    className="flex items-center gap-3 group cursor-default"
+                                >
+                                    <div className="p-2 bg-accent-500/20 rounded-full group-hover:bg-accent-500/30 transition-colors">
+                                        <Clock className="w-5 h-5 text-accent-400" />
+                                    </div>
+                                    <span className="text-gray-200">{workingHours}</span>
+                                </motion.div>
+                            )}
                         </motion.div>
                     </motion.div>
                 </div>

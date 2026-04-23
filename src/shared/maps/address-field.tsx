@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Map, Placemark, SearchControl, YMaps } from '@iminside/react-yandex-maps';
 import { MapPin, X } from 'lucide-react';
 
@@ -6,12 +6,20 @@ interface AddressFieldProps  {
     onChange?: (data: [number, number]) => void;
     value?: [number, number] | null;
     center?: [number, number] | null;
-    [key: string]: any
+    className?: string;
+    placeholder?: string;
 }
 
-export const AddressField: React.FC<AddressFieldProps> = ({ onChange, className, ...props }) => {
+export const AddressField: React.FC<AddressFieldProps> = ({ onChange, value, center, className, placeholder }) => {
     const [isMapOpen, setIsMapOpen] = useState(false);
-    const [coordinates, setCoordinates] = useState<[number, number] | undefined>(undefined);
+    const [coordinates, setCoordinates] = useState<[number, number] | undefined>(
+        value ?? undefined,
+    );
+
+    // Синхронизация с внешним value (controlled mode).
+    useEffect(() => {
+        setCoordinates(value ?? undefined);
+    }, [value?.[0], value?.[1]]);
 
     const getReverseGeocode = async (coords: [number, number]) => {
         onChange?.(coords);
@@ -27,12 +35,11 @@ export const AddressField: React.FC<AddressFieldProps> = ({ onChange, className,
         <>
             <div className="relative">
                 <input
-                    {...props}
                     type="text"
                     value={coordinates ? coordinates.join(', ') : ''}
                     readOnly
                     className={`w-full px-4 py-3 pr-12 border border-gray-200 rounded-xl focus:ring-2 focus:ring-accent-500 focus:border-transparent transition-all cursor-pointer ${className || ''}`}
-                    placeholder="Выберите адрес на карте"
+                    placeholder={placeholder ?? 'Выберите адрес на карте'}
                     onClick={() => setIsMapOpen(true)}
                 />
 
@@ -49,7 +56,7 @@ export const AddressField: React.FC<AddressFieldProps> = ({ onChange, className,
             {/* Модальное окно с картой */}
             {isMapOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                    <div className="relative w-[90vw] max-w-6xl h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden">
+                    <div className="relative w-[50vw] max-w-6xl h-[50vh] bg-white rounded-2xl shadow-2xl overflow-hidden">
                         {/* Заголовок */}
                         <div className="flex items-center justify-between p-4 border-b border-gray-200">
                             <h3 className="text-lg font-semibold text-gray-900">
@@ -74,8 +81,8 @@ export const AddressField: React.FC<AddressFieldProps> = ({ onChange, className,
                             >
                                 <Map
                                     defaultState={{
-                                        center: [41.62372, 74.039612],
-                                        zoom: 7,
+                                        center: coordinates ?? center ?? [41.62372, 74.039612],
+                                        zoom: coordinates ? 14 : 7,
                                         controls: [],
                                     }}
                                     options={{

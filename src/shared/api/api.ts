@@ -1,12 +1,7 @@
 import axios, { type AxiosInstance, type InternalAxiosRequestConfig, type AxiosResponse, AxiosError } from 'axios';
-import {Storage} from "../utils/storage.ts";
-import {BASE_URL} from "../../contants";
-import {Path} from "./path.ts";
-
-interface TokenResponse {
-    accessToken: string;
-    refreshToken: string;
-}
+import { Storage } from "../utils/storage.ts";
+import { BASE_URL } from "../../contants";
+import { Path } from "./path.ts";
 
 interface ErrorResponse {
     message: string;
@@ -17,12 +12,16 @@ interface ErrorResponse {
 const apiClient: AxiosInstance = axios.create({
     baseURL: BASE_URL,
     timeout: 15000,
+    withCredentials: true,
     headers: {
         'Content-Type': 'application/json',
     },
 });
 
 let isRefreshing = false;
+let refreshAttempts = 0;
+const MAX_REFRESH_ATTEMPTS = 3;
+
 let failedQueue: Array<{
     resolve: (value?: unknown) => void;
     reject: (reason?: unknown) => void;
@@ -39,7 +38,14 @@ const processQueue = (error: Error | null, token: string | null = null) => {
     failedQueue = [];
 };
 
-// Интерсептор для добавления токена
+const resetRefreshAttempts = () => {
+    refreshAttempts = 0;
+};
+
+const isMaxAttemptsReached = (): boolean => {
+    return refreshAttempts >= MAX_REFRESH_ATTEMPTS;
+};
+
 apiClient.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
         const token = Storage.getItem('ACCESS_TOKEN');
@@ -53,78 +59,117 @@ apiClient.interceptors.request.use(
     }
 );
 
-// Интерсептор для обработки ответов и refresh token
 apiClient.interceptors.response.use(
     (response: AxiosResponse) => {
+        // Разворачиваем envelope { success: true, data: ... } автоматически
+        if (response.data && typeof response.data === 'object' && 'success' in response.data) {
+            response.data = response.data.data;
+        }
         return response;
     },
     async (error: AxiosError<ErrorResponse>) => {
-        const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+        const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean; _refreshAttempt?: number };
 
-        // Если ошибка 401 и запрос не повторялся
-        if (error.response?.status === 401 && !originalRequest._retry) {
-            if (isRefreshing) {
-                return new Promise((resolve, reject) => {
-                    failedQueue.push({ resolve, reject });
-                })
-                    .then(() => {
-                        return apiClient(originalRequest);
-                    })
-                    .catch(err => {
-                        return Promise.reject(err);
-                    });
+        // Если ошибка не 401 или уже достигнут лимит попыток
+        if (error.response?.status !== 401) {
+            return Promise.reject(error);
+        }
+
+        // Если это не запрос на рефреш и мы уже пробовали рефрешить много раз
+        if (!originalRequest._retry && isMaxAttemptsReached()) {
+            resetRefreshAttempts();
+            Storage.removeItem('ACCESS_TOKEN');
+            Storage.removeItem('REFRESH_TOKEN');
+
+            if (typeof window !== 'undefined') {
+                window.location.href = '/login';
+            }
+            return Promise.reject(new Error('Maximum refresh attempts reached'));
+        }
+
+        // Если это запрос на рефреш (не нужно пытаться рефрешить его снова)
+        if (originalRequest.url?.includes(Path.Auth.Refresh)) {
+            resetRefreshAttempts();
+            Storage.removeItem('ACCESS_TOKEN');
+            Storage.removeItem('REFRESH_TOKEN');
+
+            if (typeof window !== 'undefined') {
+                window.location.href = '/login';
+            }
+            return Promise.reject(error);
+        }
+
+        if (!originalRequest._retry) {
+            originalRequest._retry = true;
+            originalRequest._refreshAttempt = (originalRequest._refreshAttempt || 0) + 1;
+            refreshAttempts++;
+        }
+
+        if (isRefreshing) {
+            return new Promise((resolve, reject) => {
+                failedQueue.push({ resolve, reject });
+            })
+                .then(() => apiClient(originalRequest))
+                .catch(err => Promise.reject(err));
+        }
+
+        isRefreshing = true;
+
+        try {
+            // Refresh token передаётся автоматически через HttpOnly cookie
+            const response = await axios.post(
+                `${BASE_URL}/${Path.Auth.Refresh}`,
+                {},
+                { withCredentials: true }
+            );
+
+            // Разворачиваем envelope вручную (здесь не проходит через interceptor)
+            const responseData = response.data?.data ?? response.data;
+            const accessToken = responseData?.accessToken || responseData?.data?.accessToken;
+
+            if (!accessToken) {
+                throw new Error('No access token received');
             }
 
-            originalRequest._retry = true;
-            isRefreshing = true;
+            Storage.setItem('ACCESS_TOKEN', accessToken);
 
-            try {
-                const refreshToken = Storage.getItem('REFRESH_TOKEN');
-                if (!refreshToken) {
-                    throw new Error('No refresh token');
-                }
+            if (originalRequest.headers) {
+                originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+            }
 
-                // Запрос на обновление токенов
-                const response = await axios.post<TokenResponse>(
-                    `${BASE_URL}/${Path.Auth.Refresh}`,
-                    { refreshToken }
-                );
+            // Сброс счетчика при успешном обновлении
+            resetRefreshAttempts();
+            processQueue(null, accessToken);
 
-                const { accessToken, refreshToken: newRefreshToken } = response.data;
+            return apiClient(originalRequest);
+        } catch (refreshError) {
+            const axiosError = refreshError as AxiosError;
 
-                // Сохраняем новые токены
-                Storage.setItem('REFRESH_TOKEN', newRefreshToken)
-                Storage.setItem('ACCESS_TOKEN', accessToken)
+            // Если рефреш не удался, увеличиваем счетчик
+            console.error(`Refresh attempt ${refreshAttempts}/${MAX_REFRESH_ATTEMPTS} failed:`, axiosError.message);
 
-                // Обновляем заголовок авторизации
-                if (originalRequest.headers) {
-                    originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-                }
+            processQueue(refreshError as Error, null);
 
-                // Обрабатываем очередь запросов
-                processQueue(null, accessToken);
+            // Если достигнут лимит попыток, очищаем всё и редиректим на логин
+            if (isMaxAttemptsReached()) {
+                resetRefreshAttempts();
+                Storage.removeItem('ACCESS_TOKEN');
+                Storage.removeItem('REFRESH_TOKEN');
 
-                // Повторяем оригинальный запрос
-                return apiClient(originalRequest);
-            } catch (refreshError) {
-                // Если refresh token невалидный, очищаем токены и перенаправляем на логин
-                processQueue(refreshError as Error, null);
-                Storage.removeItem('REFRESH_TOKEN')
-                Storage.removeItem('ACCESS_TOKEN')
-
-                // Перенаправляем на страницу логина
                 if (typeof window !== 'undefined') {
                     window.location.href = '/login';
                 }
-
-                return Promise.reject(refreshError);
-            } finally {
-                isRefreshing = false;
             }
-        }
 
-        return Promise.reject(error);
+            return Promise.reject(refreshError);
+        } finally {
+            isRefreshing = false;
+        }
     }
 );
+
+export const resetRefreshCounter = () => {
+    resetRefreshAttempts();
+};
 
 export default apiClient;

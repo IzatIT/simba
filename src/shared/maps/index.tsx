@@ -1,7 +1,7 @@
 import {Map, YMaps} from '@iminside/react-yandex-maps'
 import {useRef} from 'react'
-import {MapContent} from './map-content'
-import {ResizeKg} from "./resize-kg"
+import {MapContent} from './map-content.tsx'
+import {ResizeKg} from "./resize-kg.tsx"
 import {KG_CENTER_COORDINATE, type MapPlaceMarkData, type MapPolylineData} from "../../contants";
 
 
